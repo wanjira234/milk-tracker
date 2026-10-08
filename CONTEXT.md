@@ -44,6 +44,7 @@ pages/2_feed_log.py         Log feed against yield
 pages/3_budget.py           Current and upcoming month feed budget
 src/ui.py                   Shared Streamlit helpers (farmer selector, error text)
 src/db.py                   Postgres connection and queries (psycopg2)
+src/trends.py               Pure dashboard calculations (daily tables, summary, feed-yield signals)
 src/models.py               Yield-vs-feed model
 src/suggestions.py          Turns model output into feed suggestions
 src/llm.py                  Claude (Haiku) SMS wording
@@ -55,6 +56,7 @@ modal_jobs/daily_sms_dispatch.py   Scheduled SMS dispatch
 sql/schema.sql              Database schema
 tests/test_db.py            DB layer tests (need TEST_DATABASE_URL; they truncate tables)
 tests/test_manual_entry.py  Validation tests (no database needed)
+tests/test_trends.py        Dashboard calculation tests (no database needed)
 tests/test_suggestions.py   Tests for the suggestion logic
 ```
 
@@ -74,5 +76,8 @@ tests/test_suggestions.py   Tests for the suggestion logic
 - Still to build: ingestion, model, suggestions, SMS and LLM wiring, dashboard pages, Modal jobs, farmer signup, deck.
 - `src/ingestion/manual_entry.py` done: `record_yield` / `record_feed` validate (session, non-negative, plausible caps, no future dates, feed type normalised to lowercase) then write via `src/db.py`. Validators are pure functions, tested without a DB. 26 tests passing in total.
 - `app.py` (home: add farmer with Kenyan phone normalisation, today and 7-day litres) and `pages/2_feed_log.py` (yield and feed entry forms, last 14 days) work. Checked headlessly with Streamlit AppTest against local Postgres, and visually by screenshot. `normalize_phone` lives in `manual_entry.py`.
-- `pages/1_dashboard.py` and `pages/3_budget.py` are still empty, so they show as blank pages in the sidebar until built.
-- Next up: the dashboard (yield vs feed trends), then the budget page.
+- `pages/1_dashboard.py` done: 14/30/90-day views, average and best day, feed spend, feed cost per litre, milk-per-day chart, one feed chart per feed (each on its own scale, because forage kg would flatten concentrate kg), and a "does feed move yield?" correlation signal. Calculations live in `src/trends.py` and are tested without Streamlit or a DB.
+- Dashboard rule: a day only counts if all 3 milkings are recorded (`MILKINGS_PER_DAY`). Partial days are left out of litres charts and averages and reported in a caption, so a missing entry never looks like a drop in milk.
+- The feed-yield correlation is an early signal only: needs at least 7 complete days and variation in the feed amount; a constant ration is skipped. The model in `src/models.py` should take over from this.
+- `pages/3_budget.py` is still empty, so it shows as a blank page in the sidebar until built.
+- Next up: the budget page, then the per-farm yield-vs-feed model (`src/models.py`) and suggestions.
