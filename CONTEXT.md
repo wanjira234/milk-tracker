@@ -53,6 +53,7 @@ modal_jobs/weekly_retrain.py    Scheduled retrain
 modal_jobs/daily_sms_dispatch.py   Scheduled SMS dispatch
 sql/schema.sql              Database schema
 tests/test_db.py            DB layer tests (need TEST_DATABASE_URL; they truncate tables)
+tests/test_manual_entry.py  Validation tests (no database needed)
 tests/test_suggestions.py   Tests for the suggestion logic
 ```
 
@@ -70,4 +71,5 @@ tests/test_suggestions.py   Tests for the suggestion logic
 - Scaffold exists. Foundation layer done and tested: `.gitignore`, `requirements.txt`, `.env.example`, Streamlit theme, `sql/schema.sql` (idempotent), `src/db.py`, `tests/test_db.py` (7 passing).
 - Schema is herd-level: one `farmers` row is one farm; yield is per milking session (morning/afternoon/evening), unique per farmer/date/session.
 - Still to build: ingestion, model, suggestions, SMS and LLM wiring, dashboard pages, Modal jobs, farmer signup, deck.
-- Next up: `src/ingestion/manual_entry.py`, then the feed log and dashboard pages.
+- `src/ingestion/manual_entry.py` done: `record_yield` / `record_feed` validate (session, non-negative, plausible caps, no future dates, feed type normalised to lowercase) then write via `src/db.py`. Validators are pure functions, tested without a DB. 26 tests passing in total.
+- Next up: Streamlit entry point and the feed log page (`app.py`, `pages/2_feed_log.py`), then the dashboard.
