@@ -42,6 +42,7 @@ app.py                      Streamlit entry point
 pages/1_dashboard.py        Yield and feed trends
 pages/2_feed_log.py         Log feed against yield
 pages/3_budget.py           Current and upcoming month feed budget
+src/ui.py                   Shared Streamlit helpers (farmer selector, error text)
 src/db.py                   Postgres connection and queries (psycopg2)
 src/models.py               Yield-vs-feed model
 src/suggestions.py          Turns model output into feed suggestions
@@ -72,4 +73,6 @@ tests/test_suggestions.py   Tests for the suggestion logic
 - Schema is herd-level: one `farmers` row is one farm; yield is per milking session (morning/afternoon/evening), unique per farmer/date/session.
 - Still to build: ingestion, model, suggestions, SMS and LLM wiring, dashboard pages, Modal jobs, farmer signup, deck.
 - `src/ingestion/manual_entry.py` done: `record_yield` / `record_feed` validate (session, non-negative, plausible caps, no future dates, feed type normalised to lowercase) then write via `src/db.py`. Validators are pure functions, tested without a DB. 26 tests passing in total.
-- Next up: Streamlit entry point and the feed log page (`app.py`, `pages/2_feed_log.py`), then the dashboard.
+- `app.py` (home: add farmer with Kenyan phone normalisation, today and 7-day litres) and `pages/2_feed_log.py` (yield and feed entry forms, last 14 days) work. Checked headlessly with Streamlit AppTest against local Postgres, and visually by screenshot. `normalize_phone` lives in `manual_entry.py`.
+- `pages/1_dashboard.py` and `pages/3_budget.py` are still empty, so they show as blank pages in the sidebar until built.
+- Next up: the dashboard (yield vs feed trends), then the budget page.

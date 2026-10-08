@@ -3,7 +3,7 @@ from datetime import date
 
 import pytest
 
-from src.ingestion.manual_entry import validate_feed, validate_yield
+from src.ingestion.manual_entry import normalize_phone, validate_feed, validate_yield
 
 TODAY = date(2026, 10, 9)
 PAST = date(2026, 10, 8)
@@ -63,3 +63,21 @@ def test_feed_rejects_bad_input(feed_type, kg, cost):
 def test_feed_rejects_future_date():
     with pytest.raises(ValueError):
         validate_feed(date(2026, 10, 10), "hay", 5, today=TODAY)
+
+
+@pytest.mark.parametrize(
+    "raw",
+    ["0712345678", "712345678", "254712345678", "+254712345678", "+254 712 345 678", "0712-345-678", "(0712) 345 678"],
+)
+def test_phone_normalises_to_e164(raw):
+    assert normalize_phone(raw) == "+254712345678"
+
+
+def test_phone_accepts_01_prefix_numbers():
+    assert normalize_phone("0112345678") == "+254112345678"
+
+
+@pytest.mark.parametrize("raw", ["", "071234567", "07123456789", "0212345678", "abc", "+1 415 555 0100", "0712x45678"])
+def test_phone_rejects_bad_numbers(raw):
+    with pytest.raises(ValueError):
+        normalize_phone(raw)

@@ -2,6 +2,7 @@
 
 Validation is separate from the DB call so it can be tested without Postgres.
 """
+import re
 from datetime import date
 
 from src import db
@@ -57,6 +58,27 @@ def validate_feed(log_date, feed_type, kg, cost_kes=None, today=None):
             raise ValueError("cost cannot be negative")
         cost = round(cost, 2)
     return log_date, feed_type, round(kg, 2), cost
+
+
+def normalize_phone(raw):
+    """Return a Kenyan mobile number as +254XXXXXXXXX, or raise ValueError.
+
+    Accepts 0712345678, 712345678, 254712345678, +254 712 345 678, 0112345678.
+    """
+    digits = re.sub(r"[\s\-().]", "", str(raw))
+    if digits.startswith("+"):
+        digits = digits[1:]
+    if not digits.isdigit():
+        raise ValueError("phone number should contain digits only")
+    if digits.startswith("254"):
+        national = digits[3:]
+    elif digits.startswith("0"):
+        national = digits[1:]
+    else:
+        national = digits
+    if not re.fullmatch(r"[17]\d{8}", national):
+        raise ValueError("enter a Kenyan mobile number, e.g. 0712 345 678")
+    return "+254" + national
 
 
 def record_yield(farmer_id, log_date, session, litres):
