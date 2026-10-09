@@ -136,6 +136,27 @@ def month_feed_spend(farmer_id, month: date):
     return row["spent"]
 
 
+def monthly_feed_spend(farmer_id, today: date, months=6):
+    """Feed spend per month for the current month and the previous `months`, newest first.
+
+    `uncosted` counts entries with no cost, which makes `spent` an understatement.
+    """
+    return _query(
+        """
+        SELECT date_trunc('month', log_date)::date AS month,
+               COALESCE(SUM(cost_kes), 0)          AS spent,
+               COUNT(*)                            AS entries,
+               COUNT(*) FILTER (WHERE cost_kes IS NULL) AS uncosted
+        FROM feed_logs
+        WHERE farmer_id = %s
+          AND log_date >= (date_trunc('month', %s::date) - make_interval(months => %s))::date
+          AND log_date <= %s::date
+        GROUP BY 1 ORDER BY 1 DESC
+        """,
+        (farmer_id, today, months, today),
+    )
+
+
 def set_budget(farmer_id, month: date, feed_budget_kes):
     _query(
         """

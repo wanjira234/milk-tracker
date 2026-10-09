@@ -77,3 +77,16 @@ def test_log_sms(farmer):
     db.log_sms(farmer, "hello", status="sent", provider_ref="abc")
     row = db._query("SELECT * FROM sms_log", one=True)
     assert row["body"] == "hello" and row["status"] == "sent"
+
+
+def test_monthly_feed_spend_groups_by_month_and_flags_uncosted(farmer):
+    db.add_feed(farmer, date(2026, 8, 20), "dairy meal", 5, 300)
+    db.add_feed(farmer, date(2026, 9, 5), "dairy meal", 5, 310)
+    db.add_feed(farmer, date(2026, 9, 6), "hay", 5, None)
+    db.add_feed(farmer, date(2026, 10, 2), "dairy meal", 5, 320)
+    db.add_feed(farmer, date(2026, 10, 20), "dairy meal", 5, 999)  # after "today": excluded
+    rows = {str(r["month"]): r for r in db.monthly_feed_spend(farmer, date(2026, 10, 9), months=1)}
+    assert set(rows) == {"2026-09-01", "2026-10-01"}  # August is outside months=1
+    assert float(rows["2026-10-01"]["spent"]) == 320
+    assert float(rows["2026-09-01"]["spent"]) == 310
+    assert rows["2026-09-01"]["entries"] == 2 and rows["2026-09-01"]["uncosted"] == 1
