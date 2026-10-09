@@ -78,13 +78,14 @@ def upsert_yield(farmer_id, log_date, session, litres, source="manual"):
     )
 
 
-def add_feed(farmer_id, log_date, feed_type, kg, cost_kes=None):
+def add_feed(farmer_id, log_date, feed_type, kg, cost_kes=None, units=None, catalogue_id=None):
+    """Record one feed entry. kg and cost_kes are canonical; units/catalogue_id say how it was entered."""
     _query(
         """
-        INSERT INTO feed_logs (farmer_id, log_date, feed_type, kg, cost_kes)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO feed_logs (farmer_id, log_date, feed_type, kg, cost_kes, units, catalogue_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
         """,
-        (farmer_id, log_date, feed_type, kg, cost_kes),
+        (farmer_id, log_date, feed_type, kg, cost_kes, units, catalogue_id),
     )
 
 
@@ -184,3 +185,80 @@ def log_sms(farmer_id, body, status="queued", provider_ref=None):
         "INSERT INTO sms_log (farmer_id, body, status, provider_ref) VALUES (%s, %s, %s, %s)",
         (farmer_id, body, status, provider_ref),
     )
+
+
+# --- farm setup: milk price, feed catalogue, cows in milk --------------------
+
+def set_milk_price(farmer_id, price_kes):
+    _query("UPDATE farmers SET milk_price_kes = %s WHERE id = %s", (price_kes, farmer_id))
+
+
+def get_milk_price(farmer_id):
+    """KES per litre, or None if the farmer has not set one."""
+    row = _query("SELECT milk_price_kes FROM farmers WHERE id = %s", (farmer_id,), one=True)
+    return row["milk_price_kes"] if row else None
+
+
+def upsert_catalogue_item(farmer_id, name, unit, kg_per_unit, kes_per_unit):
+    """Add a feed to the farm's catalogue, or update it (and reactivate it). Returns id."""
+    row = _query(
+        """
+        INSERT INTO feed_catalogue (farmer_id, name, unit, kg_per_unit, kes_per_unit)
+        VALUES (%s, %s, %s, %s, %s)
+        ON CONFLICT (farmer_id, name) DO UPDATE
+            SET unit = EXCLUDED.unit,
+                kg_per_unit = EXCLUDED.kg_per_unit,
+                kes_per_unit = EXCLUDED.kes_per_unit,
+                active = TRUE
+        RETURNING id
+        """,
+        (farmer_id, name, unit, kg_per_unit, kes_per_unit),
+        one=True,
+    )
+    return row["id"]
+
+
+def list_catalogue(farmer_id, active_only=True):
+    sql = "SELECT * FROM feed_catalogue WHERE farmer_id = %s"
+    if active_only:
+        sql += " AND active"
+    return _query(sql + " ORDER BY name", (farmer_id,))
+
+
+def retire_catalogue_item(item_id):
+    """Hide a feed from the logging form. Past entries keep their numbers."""
+    _query("UPDATE feed_catalogue SET active = FALSE WHERE id = %s", (item_id,))
+
+
+def set_cows_in_milk(farmer_id, effective_date, cows):
+    """Cows in milk from effective_date until the next entry. Same date overwrites."""
+    _query(
+        """
+        INSERT INTO herd_log (farmer_id, effective_date, cows_in_milk)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (farmer_id, effective_date) DO UPDATE SET cows_in_milk = EXCLUDED.cows_in_milk
+        """,
+        (farmer_id, effective_date, cows),
+    )
+
+
+def herd_history(farmer_id):
+    """Every cows-in-milk entry, newest first."""
+    return _query(
+        "SELECT effective_date, cows_in_milk FROM herd_log WHERE farmer_id = %s ORDER BY effective_date DESC",
+        (farmer_id,),
+    )
+
+
+def cows_in_milk_on(farmer_id, day):
+    """Cows in milk on `day`: the latest entry on or before it, or None if there is none yet."""
+    row = _query(
+        """
+        SELECT cows_in_milk FROM herd_log
+        WHERE farmer_id = %s AND effective_date <= %s
+        ORDER BY effective_date DESC LIMIT 1
+        """,
+        (farmer_id, day),
+        one=True,
+    )
+    return row["cows_in_milk"] if row else None

@@ -93,3 +93,104 @@ def record_feed(farmer_id, log_date, feed_type, kg, cost_kes=None):
     log_date, feed_type, kg, cost = validate_feed(log_date, feed_type, kg, cost_kes)
     db.add_feed(farmer_id, log_date, feed_type, kg, cost)
     return {"log_date": log_date, "feed_type": feed_type, "kg": kg, "cost_kes": cost}
+
+
+# --- farm setup --------------------------------------------------------------
+
+MAX_MILK_PRICE_KES = 500
+MAX_COWS = 500
+MAX_KG_PER_UNIT = 20000  # a truck load can hold several tonnes
+MAX_KES_PER_UNIT = 1_000_000
+
+
+def clean_name(raw):
+    """Tidy a feed name: trimmed, single spaces, lowercase."""
+    return " ".join(str(raw).split()).lower()
+
+
+def _number(value, label):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        raise ValueError(f"{label} must be a number") from None
+
+
+def validate_milk_price(price):
+    price = _number(price, "price")
+    if price <= 0:
+        raise ValueError("price must be greater than zero")
+    if price > MAX_MILK_PRICE_KES:
+        raise ValueError(f"price looks too high (over KES {MAX_MILK_PRICE_KES} a litre); check for a typo")
+    return round(price, 2)
+
+
+def validate_catalogue_item(name, unit, kg_per_unit, kes_per_unit):
+    """Return a cleaned (name, unit, kg_per_unit, kes_per_unit) tuple or raise ValueError."""
+    name, unit = clean_name(name), clean_name(unit)
+    if not name:
+        raise ValueError("feed name is required")
+    if not unit:
+        raise ValueError("unit is required (for example trunk, wheelbarrow, bag)")
+    kg = _number(kg_per_unit, "kg per unit")
+    if kg <= 0:
+        raise ValueError("kg per unit must be greater than zero")
+    if kg > MAX_KG_PER_UNIT:
+        raise ValueError(f"kg per unit looks too high (over {MAX_KG_PER_UNIT}); check for a typo")
+    kes = _number(kes_per_unit, "price per unit")
+    if kes < 0:
+        raise ValueError("price per unit cannot be negative")
+    if kes > MAX_KES_PER_UNIT:
+        raise ValueError("price per unit looks too high; check for a typo")
+    return name, unit, round(kg, 2), round(kes, 2)
+
+
+def validate_cows(effective_date, cows, today=None):
+    """Return (effective_date, cows) with cows a whole number, or raise ValueError."""
+    today = today or date.today()
+    if effective_date > today:
+        raise ValueError("date cannot be in the future")
+    cows = _number(cows, "cows in milk")
+    if cows != int(cows):
+        raise ValueError("cows in milk must be a whole number")
+    cows = int(cows)
+    if cows < 0:
+        raise ValueError("cows in milk cannot be negative")
+    if cows > MAX_COWS:
+        raise ValueError(f"cows in milk looks too high (over {MAX_COWS}); check for a typo")
+    return effective_date, cows
+
+
+def record_milk_price(farmer_id, price):
+    price = validate_milk_price(price)
+    db.set_milk_price(farmer_id, price)
+    return price
+
+
+def record_catalogue_item(farmer_id, name, unit, kg_per_unit, kes_per_unit):
+    """Validate and save a feed in the farm's catalogue. Returns the cleaned values."""
+    name, unit, kg, kes = validate_catalogue_item(name, unit, kg_per_unit, kes_per_unit)
+    item_id = db.upsert_catalogue_item(farmer_id, name, unit, kg, kes)
+    return {"id": item_id, "name": name, "unit": unit, "kg_per_unit": kg, "kes_per_unit": kes}
+
+
+def record_cows_in_milk(farmer_id, effective_date, cows):
+    effective_date, cows = validate_cows(effective_date, cows)
+    db.set_cows_in_milk(farmer_id, effective_date, cows)
+    return {"effective_date": effective_date, "cows_in_milk": cows}
+
+
+def feed_from_units(item, units):
+    """Convert units of a catalogue feed to (kg, cost_kes). `item` is a feed_catalogue row."""
+    units = _number(units, "units")
+    if units <= 0:
+        raise ValueError("units must be greater than zero")
+    return units * float(item["kg_per_unit"]), units * float(item["kes_per_unit"])
+
+
+def record_feed_units(farmer_id, log_date, item, units):
+    """Log feed in the farm's own units. kg and cost are computed from the catalogue and
+    stored on the entry, so a later price change doesn't rewrite history."""
+    kg, cost = feed_from_units(item, units)
+    log_date, feed_type, kg, cost = validate_feed(log_date, item["name"], kg, cost)
+    db.add_feed(farmer_id, log_date, feed_type, kg, cost, units=round(float(units), 2), catalogue_id=item["id"])
+    return {"log_date": log_date, "feed_type": feed_type, "units": float(units), "unit": item["unit"], "kg": kg, "cost_kes": cost}
