@@ -14,7 +14,7 @@ from src import db  # noqa: E402
 
 @pytest.fixture(autouse=True)
 def clean():
-    db._query("TRUNCATE sms_log, monthly_budgets, feed_logs, yield_logs, farmers RESTART IDENTITY CASCADE")
+    db._query("TRUNCATE sms_log, monthly_budgets, feed_logs, yield_logs, herd_log, feed_catalogue, farmers RESTART IDENTITY CASCADE")
 
 
 @pytest.fixture
@@ -90,3 +90,53 @@ def test_monthly_feed_spend_groups_by_month_and_flags_uncosted(farmer):
     assert float(rows["2026-10-01"]["spent"]) == 320
     assert float(rows["2026-09-01"]["spent"]) == 310
     assert rows["2026-09-01"]["entries"] == 2 and rows["2026-09-01"]["uncosted"] == 1
+
+
+def test_milk_price_roundtrip(farmer):
+    assert db.get_milk_price(farmer) is None
+    db.set_milk_price(farmer, 50)
+    assert float(db.get_milk_price(farmer)) == 50
+
+
+def test_catalogue_upsert_updates_price_and_reactivates(farmer):
+    first = db.upsert_catalogue_item(farmer, "banana trunks", "trunk", 25, 40)
+    again = db.upsert_catalogue_item(farmer, "banana trunks", "trunk", 25, 45)
+    assert again == first
+    db.retire_catalogue_item(first)
+    assert db.list_catalogue(farmer) == []
+    assert len(db.list_catalogue(farmer, active_only=False)) == 1
+    db.upsert_catalogue_item(farmer, "banana trunks", "trunk", 25, 50)  # re-adding brings it back
+    items = db.list_catalogue(farmer)
+    assert len(items) == 1 and float(items[0]["kes_per_unit"]) == 50
+
+
+def test_catalogue_is_per_farmer(farmer):
+    other = db.add_farmer("Other", "+254700000002")
+    db.upsert_catalogue_item(farmer, "napier", "bundle", 10, 0)
+    assert db.list_catalogue(other) == []
+
+
+def test_feed_logged_in_units_keeps_price_snapshot(farmer):
+    item_id = db.upsert_catalogue_item(farmer, "machicha", "wheelbarrow", 40, 150)
+    db.add_feed(farmer, date(2026, 10, 1), "machicha", 120, 450, units=3, catalogue_id=item_id)
+    db.upsert_catalogue_item(farmer, "machicha", "wheelbarrow", 40, 999)  # price rises later
+    row = db._query("SELECT * FROM feed_logs", one=True)
+    assert float(row["units"]) == 3 and float(row["kg"]) == 120 and float(row["cost_kes"]) == 450  # history unchanged
+
+
+def test_cows_in_milk_carries_forward(farmer):
+    assert db.cows_in_milk_on(farmer, date(2026, 10, 5)) is None
+    db.set_cows_in_milk(farmer, date(2026, 10, 1), 6)
+    db.set_cows_in_milk(farmer, date(2026, 10, 8), 5)  # one dried off
+    assert db.cows_in_milk_on(farmer, date(2026, 9, 30)) is None  # before the first entry
+    assert db.cows_in_milk_on(farmer, date(2026, 10, 4)) == 6
+    assert db.cows_in_milk_on(farmer, date(2026, 10, 8)) == 5
+    assert db.cows_in_milk_on(farmer, date(2026, 10, 20)) == 5
+    db.set_cows_in_milk(farmer, date(2026, 10, 8), 4)  # same date overwrites
+    assert db.cows_in_milk_on(farmer, date(2026, 10, 9)) == 4
+    assert [r["cows_in_milk"] for r in db.herd_history(farmer)] == [4, 6]
+
+
+def test_negative_cows_rejected_by_database(farmer):
+    with pytest.raises(Exception):
+        db.set_cows_in_milk(farmer, date(2026, 10, 1), -1)

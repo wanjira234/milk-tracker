@@ -19,6 +19,21 @@ Built for the FNB App of the Year Hackathon (Best African Solution category). Go
 
 The point of difference is closing this loop per farm, on a basic phone, using yield data that buyers already collect. Do not drift into generic farm record-keeping.
 
+## Feed reality on the first farm (from the owner)
+
+- Milk price: Fresha pays **KES 50 per litre**. Store it per farmer; do not hard-code it.
+- Feeds in use: pineapple waste (Del Monte, bought by the truck load), machicha (brewers' spent grain, bought weekly), napier, maize stalks, hay, banana trunks (heavy use at the moment), and store-bought feeds and protein mixes bought separately and mixed at home. Some feeds are mixed together, some fed standalone. No molasses. Water is from a well, so it is not a variable.
+- Consequences for the data model: bulky feeds are not weighed (trunks, wheelbarrows, truck loads) and are bought in lumps, not per feeding. Logging kg per feeding with a cost on every entry does not match how the farm works. Solved with a per-farm feed catalogue (unit, kg per unit, KES per unit): the farmer logs "6 trunks" and the app stores kg and cost computed at log time, so a later price change never rewrites history.
+- Herd size changes (calving, drying off) and moves yield more than most feed changes do. Yield per cow in milk is the honest outcome measure; the model should not trust herd litres alone.
+- Owner's direction: show milk trends and let a farmer track which feed combinations help yield and which don't, so other farmers can later get suggestions from what worked. Per farm first. Learning across farms needs many farms, consistent feed names, and farmer consent to pool data.
+
+## Advice rules (agreed 2026-10-09)
+
+- Not enough data: the farmer gets a data-nudge SMS (what is missing), never feed advice and never generic tips.
+- A single suggestion changes a feed by at most 10%.
+- Advice optimises feed margin: milk income (price per litre x litres) minus feed cost.
+- Strict evidence bar before any advice: at least 14 complete days, at least 3 different amounts of that feed, and a clear milk-vs-feed slope.
+
 ## Stack
 
 - Dashboard: Streamlit (multipage: `app.py` plus `pages/`)
@@ -42,6 +57,7 @@ app.py                      Streamlit entry point
 pages/1_dashboard.py        Yield and feed trends
 pages/2_feed_log.py         Log feed against yield
 pages/3_budget.py           Current and upcoming month feed budget
+pages/4_farm_setup.py       Milk price, feed catalogue (own units), cows in milk
 src/ui.py                   Shared Streamlit helpers (farmer selector, error text)
 src/db.py                   Postgres connection and queries (psycopg2)
 src/trends.py               Pure dashboard calculations (daily tables, summary, feed-yield signals)
@@ -83,4 +99,6 @@ tests/test_suggestions.py   Tests for the suggestion logic
 - The feed-yield correlation is an early signal only: needs at least 7 complete days and variation in the feed amount; a constant ration is skipped. The model in `src/models.py` should take over from this.
 - `pages/3_budget.py` done: this month's budget vs spend, month-end projection, status (on track / on pace to overspend with a daily allowance / over budget), next month's estimate and budget, and a recent-months table. Maths in `src/budget.py`; per-month spend from `db.monthly_feed_spend`. 65 tests passing in total.
 - Budget rules: projections only count from day 7 of the month (`MIN_DAYS_FOR_PROJECTION`), so one early feed purchase can't swing the pace. Next month's estimate uses this month's pace once reliable, else last month's daily rate. Feed entries logged without a cost make spend an understatement, and the page warns about them.
-- Next up: the per-farm yield-vs-feed model (`src/models.py`), then suggestions, SMS wording (Claude Haiku), the Modal jobs and farmer signup.
+- Farm setup done (`pages/4_farm_setup.py`, schema additions, `db.py` and `manual_entry.py` functions): per-farmer milk price, per-farm feed catalogue, and a cows-in-milk log that carries each entry forward until the next one (`db.cows_in_milk_on`). The feed log page logs in catalogue units, with plain kg still available for feeds not in the catalogue. 86 tests passing in total.
+- Decisions made 2026-10-09: the catalogue approach above; cows in milk is logged whenever it changes (the model works on litres per cow in milk); the first version of advice is single-feed advice plus a "what changed" view comparing the weeks before and after a ration change. A combination model is not attempted: one farm cannot support it, and it needs many farms, consistent feed names and farmer consent to pool data.
+- Next up: `src/models.py` (per-feed effect on litres per cow in milk, honouring the advice rules above), the "what changed" view, then suggestions, SMS wording (Claude Haiku), the Modal jobs and farmer signup.
