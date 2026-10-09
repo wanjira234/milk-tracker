@@ -45,6 +45,7 @@ pages/3_budget.py           Current and upcoming month feed budget
 src/ui.py                   Shared Streamlit helpers (farmer selector, error text)
 src/db.py                   Postgres connection and queries (psycopg2)
 src/trends.py               Pure dashboard calculations (daily tables, summary, feed-yield signals)
+src/budget.py               Pure budget maths (month-end projection, budget status, next-month estimate)
 src/models.py               Yield-vs-feed model
 src/suggestions.py          Turns model output into feed suggestions
 src/llm.py                  Claude (Haiku) SMS wording
@@ -57,6 +58,7 @@ sql/schema.sql              Database schema
 tests/test_db.py            DB layer tests (need TEST_DATABASE_URL; they truncate tables)
 tests/test_manual_entry.py  Validation tests (no database needed)
 tests/test_trends.py        Dashboard calculation tests (no database needed)
+tests/test_budget.py        Budget maths tests (no database needed)
 tests/test_suggestions.py   Tests for the suggestion logic
 ```
 
@@ -79,5 +81,6 @@ tests/test_suggestions.py   Tests for the suggestion logic
 - `pages/1_dashboard.py` done: 14/30/90-day views, average and best day, feed spend, feed cost per litre, milk-per-day chart, one feed chart per feed (each on its own scale, because forage kg would flatten concentrate kg), and a "does feed move yield?" correlation signal. Calculations live in `src/trends.py` and are tested without Streamlit or a DB.
 - Dashboard rule: a day only counts if all 3 milkings are recorded (`MILKINGS_PER_DAY`). Partial days are left out of litres charts and averages and reported in a caption, so a missing entry never looks like a drop in milk.
 - The feed-yield correlation is an early signal only: needs at least 7 complete days and variation in the feed amount; a constant ration is skipped. The model in `src/models.py` should take over from this.
-- `pages/3_budget.py` is still empty, so it shows as a blank page in the sidebar until built.
-- Next up: the budget page, then the per-farm yield-vs-feed model (`src/models.py`) and suggestions.
+- `pages/3_budget.py` done: this month's budget vs spend, month-end projection, status (on track / on pace to overspend with a daily allowance / over budget), next month's estimate and budget, and a recent-months table. Maths in `src/budget.py`; per-month spend from `db.monthly_feed_spend`. 65 tests passing in total.
+- Budget rules: projections only count from day 7 of the month (`MIN_DAYS_FOR_PROJECTION`), so one early feed purchase can't swing the pace. Next month's estimate uses this month's pace once reliable, else last month's daily rate. Feed entries logged without a cost make spend an understatement, and the page warns about them.
+- Next up: the per-farm yield-vs-feed model (`src/models.py`), then suggestions, SMS wording (Claude Haiku), the Modal jobs and farmer signup.
