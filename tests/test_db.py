@@ -140,3 +140,14 @@ def test_cows_in_milk_carries_forward(farmer):
 def test_negative_cows_rejected_by_database(farmer):
     with pytest.raises(Exception):
         db.set_cows_in_milk(farmer, date(2026, 10, 1), -1)
+
+
+def test_feed_cost_per_kg_ignores_uncosted_entries_and_unknown_prices(farmer):
+    d = date(2026, 10, 1)
+    db.add_feed(farmer, d, "dairy meal", 10, 500)        # KES 50 per kg
+    db.add_feed(farmer, d, "dairy meal", 10, None)       # no cost: must not drag the price to 25
+    db.add_feed(farmer, d, "napier", 30, 0)              # free is a price (0), not unknown
+    db.add_feed(farmer, d, "hay", 5, None)               # never costed: unknown, left out
+    db.add_feed(farmer, date(2026, 9, 1), "dairy meal", 10, 900)  # outside the window
+    prices = db.feed_cost_per_kg(farmer, date(2026, 10, 1), date(2026, 10, 31))
+    assert prices == {"dairy meal": pytest.approx(50.0), "napier": 0.0}
