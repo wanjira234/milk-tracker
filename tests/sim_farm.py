@@ -58,3 +58,29 @@ def make_farm(
         {"dairy meal": meal[lag:], "banana trunks": banana[lag:], "napier": napier[lag:]}, index=idx
     )
     return daily, feed_kg, cows_series(herd, idx)
+
+
+def to_rows(daily, feed_kg, cows):
+    """Turn a simulated farm into rows shaped like the database returns them.
+
+    Returns (yield_rows, feed_rows, herd_rows) for loader.assess_rows. Every day has all
+    3 milkings; a feed is a row only on days it was fed.
+    """
+    from decimal import Decimal
+
+    yield_rows = [
+        {"log_date": d.date(), "litres": Decimal(str(round(float(r.litres), 2))), "sessions": 3}
+        for d, r in daily.iterrows()
+    ]
+    feed_rows = [
+        {"log_date": d.date(), "feed_type": name, "kg": Decimal(str(round(float(kg), 2))), "cost_kes": None}
+        for d, row in feed_kg.iterrows()
+        for name, kg in row.items()
+        if kg > 0
+    ]
+    herd_rows, last = [], None
+    for d, n in cows.items():
+        if n != last:
+            herd_rows.append({"effective_date": d.date(), "cows_in_milk": int(n)})
+            last = n
+    return yield_rows, feed_rows, herd_rows

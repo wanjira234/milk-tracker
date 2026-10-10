@@ -262,3 +262,25 @@ def cows_in_milk_on(farmer_id, day):
         one=True,
     )
     return row["cows_in_milk"] if row else None
+
+
+# --- model inputs ------------------------------------------------------------
+
+def feed_cost_per_kg(farmer_id, start, end):
+    """Average KES per kg actually paid, per feed, over [start, end].
+
+    Only entries that have a cost count, in both the money and the kilograms, so an entry
+    logged without a cost can't drag the price toward zero. Feeds with no costed entry are
+    left out (the price is unknown, which is not the same as free).
+    """
+    rows = _query(
+        """
+        SELECT feed_type,
+               SUM(cost_kes) / NULLIF(SUM(kg) FILTER (WHERE cost_kes IS NOT NULL), 0) AS cost_per_kg
+        FROM feed_logs
+        WHERE farmer_id = %s AND log_date BETWEEN %s AND %s
+        GROUP BY feed_type
+        """,
+        (farmer_id, start, end),
+    )
+    return {r["feed_type"]: float(r["cost_per_kg"]) for r in rows if r["cost_per_kg"] is not None}

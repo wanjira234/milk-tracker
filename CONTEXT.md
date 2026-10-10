@@ -64,6 +64,7 @@ src/trends.py               Pure dashboard calculations (daily tables, summary, 
 src/budget.py               Pure budget maths (month-end projection, budget status, next-month estimate)
 src/models.py               Per-feed effect on litres per cow in milk (pure, no DB)
 src/suggestions.py          Turns model output into advice or a data nudge (pure, no DB)
+src/loader.py               Loads one farmer's data, runs the model and rules; `python -m src.loader FARMER_ID` prints the result
 src/llm.py                  Claude (Haiku) SMS wording
 src/sms.py                  Africa's Talking client
 src/ingestion/manual_entry.py   Manual yield entry
@@ -76,7 +77,9 @@ tests/test_manual_entry.py  Validation tests (no database needed)
 tests/test_trends.py        Dashboard calculation tests (no database needed)
 tests/test_budget.py        Budget maths tests (no database needed)
 tests/test_models.py        Model tests, incl. seeded calibration on simulated farms
-tests/sim_farm.py           Simulated farm generator with a known true effect (not a test file)
+tests/sim_farm.py           Simulated farm generator with a known true effect, and `to_rows` (not a test file)
+tests/test_loader.py        Loader tests on simulated farms (no database needed)
+tests/test_loader_db.py     Loader tests against real Postgres (need TEST_DATABASE_URL)
 tests/test_suggestions.py   Tests for the suggestion logic
 ```
 
@@ -98,7 +101,7 @@ tests/test_suggestions.py   Tests for the suggestion logic
 - `app.py` (home: add farmer with Kenyan phone normalisation, today and 7-day litres) and `pages/2_feed_log.py` (yield and feed entry forms, last 14 days) work. Checked headlessly with Streamlit AppTest against local Postgres, and visually by screenshot. `normalize_phone` lives in `manual_entry.py`.
 - `pages/1_dashboard.py` done: 14/30/90-day views, average and best day, feed spend, feed cost per litre, milk-per-day chart, one feed chart per feed (each on its own scale, because forage kg would flatten concentrate kg), and a "does feed move yield?" correlation signal. Calculations live in `src/trends.py` and are tested without Streamlit or a DB.
 - Dashboard rule: a day only counts if all 3 milkings are recorded (`MILKINGS_PER_DAY`). Partial days are left out of litres charts and averages and reported in a caption, so a missing entry never looks like a drop in milk.
-- The feed-yield correlation on the dashboard is an early signal only (at least 7 complete days, feed amount must vary). `src/models.py` is the real model; switch the dashboard to it once the DB loader exists.
+- The feed-yield correlation on the dashboard is an early signal only (at least 7 complete days, feed amount must vary). `src/models.py` is the real model and `src/loader.py` now feeds it from the database; switching the dashboard to it is still to do.
 - `pages/3_budget.py` done: this month's budget vs spend, month-end projection, status (on track / on pace to overspend with a daily allowance / over budget), next month's estimate and budget, and a recent-months table. Maths in `src/budget.py`; per-month spend from `db.monthly_feed_spend`. 65 tests passing in total.
 - Budget rules: projections only count from day 7 of the month (`MIN_DAYS_FOR_PROJECTION`), so one early feed purchase can't swing the pace. Next month's estimate uses this month's pace once reliable, else last month's daily rate. Feed entries logged without a cost make spend an understatement, and the page warns about them.
 - Farm setup done (`pages/4_farm_setup.py`, schema additions, `db.py` and `manual_entry.py` functions): per-farmer milk price, per-farm feed catalogue, and a cows-in-milk log that carries each entry forward until the next one (`db.cows_in_milk_on`). The feed log page logs in catalogue units, with plain kg still available for feeds not in the catalogue. 86 tests passing in total.
@@ -119,5 +122,8 @@ tests/test_suggestions.py   Tests for the suggestion logic
 - Modal, daily: for each active farmer load data, refit the model (milliseconds, no model file), call `suggestions.decide`, have Claude Haiku word one short SMS, send via Africa's Talking, log to `sms_log`. Send nothing when `decide` returns "none".
 - Modal, weekly: save a snapshot of each farm's feed estimates and verdicts to the database so the dashboard can show what the model currently believes and every SMS can be traced to numbers. Table not built yet.
 - "Retraining" is refitting on all data each run. When a farmer adds a feed and milk rises, the next runs see the new column; advice appears only once the evidence bar is met (about 2-3 weeks of varied feeding), and says nothing if the feed always changed together with another.
-- Still to build: DB loader that assembles the model inputs per farmer, the model snapshot table, the Claude Haiku SMS wording (`src/llm.py`), the Africa's Talking sender (`src/sms.py`), the Modal jobs, a "what changed" before/after view, farmer signup.
+- DB loader done (`src/loader.py`, `db.feed_cost_per_kg`; 143 tests passing in total). `assess_farmer(farmer_id, today)` loads the last 90 FULL days (the window ends yesterday, because today's milkings and feed are still being logged and half a day of feed would read as a drop), runs `models.feed_effects`, then `suggestions.decide`. Cost per kg: the catalogue price wins, else the average price actually paid on costed entries. Recent amount fed: the last 14 days on which any feed was logged, so an unlogged day isn't read as 'fed nothing'. `assess_rows` is the pure part and is tested without a database.
+- Seen when running it by hand: a fully set-up simulated farm gets advice; a brand-new farmer or one with no price or herd is told exactly what is missing and never gets advice.
+- Known product issue: 10% of a small ration can be a step the farmer can't measure (10% of 4 kg a day is 0.4 kg, under half a 70 kg bag). `suggestions` falls back to kg when the step is under half a catalogue unit. Decide how the SMS should express a step like that.
+- Still to build: the model snapshot table, the Claude Haiku SMS wording (`src/llm.py`), the Africa's Talking sender (`src/sms.py`), the Modal jobs, a "what changed" before/after view, switching the dashboard signal to the real model, farmer signup.
 - Open question for the owner: whether an SMS may suggest a deliberate small variation of a feed so the model can learn. Not done: it is feed advice, which the agreed rules reserve for when the evidence exists.
