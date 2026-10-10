@@ -62,8 +62,8 @@ src/ui.py                   Shared Streamlit helpers (farmer selector, error tex
 src/db.py                   Postgres connection and queries (psycopg2)
 src/trends.py               Pure dashboard calculations (daily tables, summary, feed-yield signals)
 src/budget.py               Pure budget maths (month-end projection, budget status, next-month estimate)
-src/models.py               Yield-vs-feed model
-src/suggestions.py          Turns model output into feed suggestions
+src/models.py               Per-feed effect on litres per cow in milk (pure, no DB)
+src/suggestions.py          Turns model output into advice or a data nudge (pure, no DB)
 src/llm.py                  Claude (Haiku) SMS wording
 src/sms.py                  Africa's Talking client
 src/ingestion/manual_entry.py   Manual yield entry
@@ -75,6 +75,8 @@ tests/test_db.py            DB layer tests (need TEST_DATABASE_URL; they truncat
 tests/test_manual_entry.py  Validation tests (no database needed)
 tests/test_trends.py        Dashboard calculation tests (no database needed)
 tests/test_budget.py        Budget maths tests (no database needed)
+tests/test_models.py        Model tests, incl. seeded calibration on simulated farms
+tests/sim_farm.py           Simulated farm generator with a known true effect (not a test file)
 tests/test_suggestions.py   Tests for the suggestion logic
 ```
 
@@ -96,9 +98,26 @@ tests/test_suggestions.py   Tests for the suggestion logic
 - `app.py` (home: add farmer with Kenyan phone normalisation, today and 7-day litres) and `pages/2_feed_log.py` (yield and feed entry forms, last 14 days) work. Checked headlessly with Streamlit AppTest against local Postgres, and visually by screenshot. `normalize_phone` lives in `manual_entry.py`.
 - `pages/1_dashboard.py` done: 14/30/90-day views, average and best day, feed spend, feed cost per litre, milk-per-day chart, one feed chart per feed (each on its own scale, because forage kg would flatten concentrate kg), and a "does feed move yield?" correlation signal. Calculations live in `src/trends.py` and are tested without Streamlit or a DB.
 - Dashboard rule: a day only counts if all 3 milkings are recorded (`MILKINGS_PER_DAY`). Partial days are left out of litres charts and averages and reported in a caption, so a missing entry never looks like a drop in milk.
-- The feed-yield correlation is an early signal only: needs at least 7 complete days and variation in the feed amount; a constant ration is skipped. The model in `src/models.py` should take over from this.
+- The feed-yield correlation on the dashboard is an early signal only (at least 7 complete days, feed amount must vary). `src/models.py` is the real model; switch the dashboard to it once the DB loader exists.
 - `pages/3_budget.py` done: this month's budget vs spend, month-end projection, status (on track / on pace to overspend with a daily allowance / over budget), next month's estimate and budget, and a recent-months table. Maths in `src/budget.py`; per-month spend from `db.monthly_feed_spend`. 65 tests passing in total.
 - Budget rules: projections only count from day 7 of the month (`MIN_DAYS_FOR_PROJECTION`), so one early feed purchase can't swing the pace. Next month's estimate uses this month's pace once reliable, else last month's daily rate. Feed entries logged without a cost make spend an understatement, and the page warns about them.
 - Farm setup done (`pages/4_farm_setup.py`, schema additions, `db.py` and `manual_entry.py` functions): per-farmer milk price, per-farm feed catalogue, and a cows-in-milk log that carries each entry forward until the next one (`db.cows_in_milk_on`). The feed log page logs in catalogue units, with plain kg still available for feeds not in the catalogue. 86 tests passing in total.
 - Decisions made 2026-10-09: the catalogue approach above; cows in milk is logged whenever it changes (the model works on litres per cow in milk); the first version of advice is single-feed advice plus a "what changed" view comparing the weeks before and after a ration change. A combination model is not attempted: one farm cannot support it, and it needs many farms, consistent feed names and farmer consent to pool data.
-- Next up: `src/models.py` (per-feed effect on litres per cow in milk, honouring the advice rules above), the "what changed" view, then suggestions, SMS wording (Claude Haiku), the Modal jobs and farmer signup.
+- Model and advice rules done (`src/models.py`, `src/suggestions.py`, 122 tests passing in total).
+  - Model: per feed, litres per cow in milk against kg of that feed per cow (averaged over today and the 2 previous days, because milk responds over a few days), with a linear time trend for lactation and season. Standard errors are corrected for day-to-day autocorrelation; the error budget is split across the feeds tested; feeds that always move together are refused. Window: last 90 days. A day counts only with all 3 milkings, a known herd, and feed logged (a day with no feed logged is unknown, not zero).
+  - Decision (`suggestions.decide`): advice only if the pessimistic end of the estimate still beats the feed's cost at the farm's milk price; at most one feed at a time; step at most 10% of the recent amount, shown in the farm's own units; otherwise a nudge (missing cows, price, days, or a feed's price) or nothing. A constant ration is shown on the dashboard, never sent as an SMS nudge.
+- What simulation showed (300 simulated farms per row, true effect known; repeat with `tests/test_models.py`):
+  - False alarms are controlled: with no real effect about 4-5% of feeds are called clear, and the 95% range covers the truth 93-95% of the time.
+  - Detection depends mostly on how much the ration varies, not on noise. True effect 1 L per kg: found in 23% of farms when the meal swings 3-6 kg a day, 73% at 2-8 kg, 99% at 0-12 kg (60 days). Longer history helps: 92% at 90 days with 2-8 kg swings. A true effect of 0.5 L per kg is found far less often. Expect "not enough evidence" most of the time unless the farm deliberately varies a feed.
+  - A cow drying off does not cause false alarms by itself. It only does if the ration changes the same day and the herd change is not logged: false alarms roughly double (about 9% against 4%) and lean one way.
+  - Feeds that always move together were refused 100 times out of 100.
+  - Not yet checked: lag length (2 days is assumed), non-linear responses (more feed eventually helps less), and effects of feeds that vary only rarely.
+
+## How it runs (design)
+
+- Streamlit app: dashboard and entry pages, reads and writes Supabase.
+- Modal, daily: for each active farmer load data, refit the model (milliseconds, no model file), call `suggestions.decide`, have Claude Haiku word one short SMS, send via Africa's Talking, log to `sms_log`. Send nothing when `decide` returns "none".
+- Modal, weekly: save a snapshot of each farm's feed estimates and verdicts to the database so the dashboard can show what the model currently believes and every SMS can be traced to numbers. Table not built yet.
+- "Retraining" is refitting on all data each run. When a farmer adds a feed and milk rises, the next runs see the new column; advice appears only once the evidence bar is met (about 2-3 weeks of varied feeding), and says nothing if the feed always changed together with another.
+- Still to build: DB loader that assembles the model inputs per farmer, the model snapshot table, the Claude Haiku SMS wording (`src/llm.py`), the Africa's Talking sender (`src/sms.py`), the Modal jobs, a "what changed" before/after view, farmer signup.
+- Open question for the owner: whether an SMS may suggest a deliberate small variation of a feed so the model can learn. Not done: it is feed advice, which the agreed rules reserve for when the evidence exists.
