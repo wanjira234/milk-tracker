@@ -65,8 +65,9 @@ src/budget.py               Pure budget maths (month-end projection, budget stat
 src/models.py               Per-feed effect on litres per cow in milk (pure, no DB)
 src/suggestions.py          Turns model output into advice or a data nudge (pure, no DB)
 src/loader.py               Loads one farmer's data, runs the model and rules; `python -m src.loader FARMER_ID` prints the result
-src/llm.py                  Claude (Haiku) SMS wording
-src/sms.py                  Africa's Talking client
+src/messages.py             Decision -> SMS facts, plain template (en; sw is a DRAFT), and the check that rejects a reworded SMS
+src/llm.py                  Claude (Haiku) rewords the template; falls back to the template on any problem
+src/sms.py                  Africa's Talking sender, segment counting, logging to sms_log
 src/ingestion/manual_entry.py   Manual yield entry
 src/ingestion/sms_forward.py    Screenshot/forwarded-SMS ingestion (later)
 modal_jobs/weekly_retrain.py    Scheduled retrain
@@ -80,6 +81,7 @@ tests/test_models.py        Model tests, incl. seeded calibration on simulated f
 tests/sim_farm.py           Simulated farm generator with a known true effect, and `to_rows` (not a test file)
 tests/test_loader.py        Loader tests on simulated farms (no database needed)
 tests/test_loader_db.py     Loader tests against real Postgres (need TEST_DATABASE_URL)
+tests/test_messages.py, test_llm.py, test_sms.py   SMS wording, Haiku fallback and sender tests (fake clients, no network)
 tests/test_suggestions.py   Tests for the suggestion logic
 ```
 
@@ -125,5 +127,6 @@ tests/test_suggestions.py   Tests for the suggestion logic
 - DB loader done (`src/loader.py`, `db.feed_cost_per_kg`; 143 tests passing in total). `assess_farmer(farmer_id, today)` loads the last 90 FULL days (the window ends yesterday, because today's milkings and feed are still being logged and half a day of feed would read as a drop), runs `models.feed_effects`, then `suggestions.decide`. Cost per kg: the catalogue price wins, else the average price actually paid on costed entries. Recent amount fed: the last 14 days on which any feed was logged, so an unlogged day isn't read as 'fed nothing'. `assess_rows` is the pure part and is tested without a database.
 - Seen when running it by hand: a fully set-up simulated farm gets advice; a brand-new farmer or one with no price or herd is told exactly what is missing and never gets advice.
 - Known product issue: 10% of a small ration can be a step the farmer can't measure (10% of 4 kg a day is 0.4 kg, under half a 70 kg bag). `suggestions` falls back to kg when the step is under half a catalogue unit. Decide how the SMS should express a step like that.
-- Still to build: the model snapshot table, the Claude Haiku SMS wording (`src/llm.py`), the Africa's Talking sender (`src/sms.py`), the Modal jobs, a "what changed" before/after view, switching the dashboard signal to the real model, farmer signup.
+- SMS done (208 tests in total, with TEST_DATABASE_URL set): `messages.py` builds the facts and a plain template from a decision; `llm.py` asks Claude Haiku to reword it; `check_message` rejects any rewording that changes a figure, names the wrong feed, flips direction, makes a promise, uses a number word, adds a link, drops the app name, or won't fit in 2 segments. Rejection, API error or no key sends the template. Amounts are exact (kg, rounded DOWN, or farm units in half-unit steps when at least half a unit); the step never exceeds 10% and the percent and KES gain shown describe the amount shown. No deliberate-variation advice. NOT yet tried against the real Claude and Africa's Talking APIs (tests use fake clients): do a sandbox send (AT_USERNAME=sandbox) before any farmer gets a message. Swahili text needs a native reader.
+- Still to build: the model snapshot table, the Modal jobs (daily SMS + weekly snapshot), throttling (<=1 SMS a farmer a day, advice at most every 14 days, nudge every 7, minimum worthwhile gain ~KES 10/day, `sms_log.kind`), a "what changed" before/after view, switching the dashboard signal to the real model, farmer signup.
 - Open question for the owner: whether an SMS may suggest a deliberate small variation of a feed so the model can learn. Not done: it is feed advice, which the agreed rules reserve for when the evidence exists.

@@ -106,7 +106,11 @@ def test_step_is_ten_percent_and_expressed_in_farm_units():
     assert a["step_kg"] == pytest.approx(2.0) and a["recent_kg"] == 20.0
     assert a["unit"] == "bag" and a["step_units"] is None  # 2 kg is under half a 70 kg bag: say it in kg
     b = run([clear("banana trunks", 0.05, 0.4)], cost_per_kg={"banana trunks": 1.0}, recent_kg={"banana trunks": 100.0})["advice"]
-    assert b["step_kg"] == pytest.approx(10.0) and b["step_units"] == 0.5 and b["unit"] == "trunk"  # 10 kg of 25 kg trunks
+    assert b["step_kg"] == pytest.approx(10.0) and b["step_units"] is None  # 0.4 of a 25 kg trunk: say it in kg
+    c = run([clear("banana trunks", 0.05, 0.4)], cost_per_kg={"banana trunks": 1.0}, recent_kg={"banana trunks": 200.0})["advice"]
+    # 20 kg is 0.8 trunk; rounded DOWN to half a trunk = 12.5 kg (rounding to nearest would give 1 trunk = 25 kg, over the limit)
+    assert c["step_units"] == 0.5 and c["unit"] == "trunk" and c["step_kg_used"] == pytest.approx(12.5)
+    assert c["step_pct"] == pytest.approx(6.25)
 
 
 def test_a_step_never_exceeds_the_agreed_maximum():
@@ -118,6 +122,21 @@ def test_a_step_never_exceeds_the_agreed_maximum():
         r = run([clear("dairy meal", lo, hi)], cost_per_kg={"dairy meal": rng.uniform(0, 60)}, recent_kg={"dairy meal": recent})
         if r["kind"] == "advice":
             assert r["advice"]["step_kg"] <= MAX_STEP * recent + 1e-9
+            assert r["advice"]["step_kg_used"] <= MAX_STEP * recent + 1e-9  # what the farmer is told to do
+
+
+def test_a_step_in_farm_units_never_exceeds_the_maximum():
+    rng = random.Random(1)
+    for _ in range(300):
+        recent, kg_per_unit = rng.uniform(5, 500), rng.uniform(1, 80)
+        r = run(
+            [clear("banana trunks", 0.05, 0.4)], cost_per_kg={"banana trunks": 1.0}, recent_kg={"banana trunks": recent},
+            catalogue={"banana trunks": {"unit": "trunk", "kg_per_unit": kg_per_unit}},
+        )
+        a = r["advice"]
+        assert a["step_kg_used"] <= MAX_STEP * recent + 1e-9
+        if a["step_units"]:
+            assert a["step_units"] * 2 == int(a["step_units"] * 2)  # whole or half units
             assert r["advice"]["gain_per_day_at_least"] > 0   # never recommends a change that could lose money
 
 
