@@ -151,3 +151,23 @@ def test_feed_cost_per_kg_ignores_uncosted_entries_and_unknown_prices(farmer):
     db.add_feed(farmer, date(2026, 9, 1), "dairy meal", 10, 900)  # outside the window
     prices = db.feed_cost_per_kg(farmer, date(2026, 10, 1), date(2026, 10, 31))
     assert prices == {"dairy meal": pytest.approx(50.0), "napier": 0.0}
+
+
+def test_send_to_farmer_logs_success_failure_and_refusal(farmer):
+    from src.sms import send_to_farmer
+
+    class Fake:
+        def __init__(self, reply):
+            self.reply = reply
+
+        def send(self, message, recipients, sender_id=None):
+            return self.reply
+
+    ok = {"SMSMessageData": {"Recipients": [{"statusCode": 101, "status": "Success", "messageId": "ATX1"}]}}
+    bad = {"SMSMessageData": {"Recipients": [{"statusCode": 403, "status": "InvalidPhoneNumber", "messageId": "None"}]}}
+    assert send_to_farmer(farmer, "+254700000001", "hello", client=Fake(ok))["ok"]
+    assert not send_to_farmer(farmer, "+254700000001", "again", client=Fake(bad))["ok"]
+    assert not send_to_farmer(farmer, "0700", "refused", client=Fake(ok))["ok"]
+    rows = db._query("SELECT body, status, provider_ref FROM sms_log ORDER BY id")
+    assert [(r["body"], r["status"]) for r in rows] == [("hello", "sent"), ("again", "failed"), ("refused", "failed")]
+    assert rows[0]["provider_ref"] == "ATX1"

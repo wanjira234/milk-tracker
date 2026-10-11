@@ -51,10 +51,11 @@ def _nudges(usable_days, cows_known, milk_price, assessed):
 
 
 def _step_units(step_kg, item):
-    """The step in the farm's own units, to the nearest half unit; None if it would round to zero."""
+    """The step in the farm's own units, rounded DOWN to a half unit so it never exceeds the
+    10% limit; None if that is zero."""
     if not item or not item.get("kg_per_unit"):
         return None
-    units = round(step_kg / float(item["kg_per_unit"]) * 2) / 2
+    units = math.floor(step_kg / float(item["kg_per_unit"]) * 2 + 1e-9) / 2
     return units if units > 0 else None
 
 
@@ -107,12 +108,14 @@ def decide(effects, *, milk_price, cost_per_kg, recent_kg, usable_days, cows_kno
                 continue
             step_kg = recent * MAX_STEP
             sign = 1 if a["verdict"] == "increase" else -1
+            item = catalogue.get(e["feed"])
+            units = _step_units(step_kg, item)
+            used_kg = units * float(item["kg_per_unit"]) if units else step_kg  # what the farmer will actually do
             # margin change per day = sign x step x margin per kg; report the worst case of the range
-            worst = min(sign * step_kg * low, sign * step_kg * high)
+            worst = min(sign * used_kg * low, sign * used_kg * high)
             a.update(
-                step_kg=step_kg, recent_kg=recent,
-                step_units=_step_units(step_kg, catalogue.get(e["feed"])),
-                unit=(catalogue.get(e["feed"]) or {}).get("unit"),
+                step_kg=step_kg, step_kg_used=used_kg, step_pct=used_kg / recent * 100, recent_kg=recent,
+                step_units=units, unit=(item or {}).get("unit"),
                 gain_per_day_at_least=worst,
             )
 

@@ -1,0 +1,127 @@
+"""Sending SMS through Africa's Talking, and counting what a message will cost.
+
+Everything here is cheap to test: the Africa's Talking client is injected, and the SDK is
+only imported when a real client is needed. A message is checked BEFORE it leaves (length,
+number, empty text), and every attempt is written to `sms_log`, successful or not.
+
+Use username "sandbox" while testing. Sandbox messages show up in the Africa's Talking
+simulator and never reach a real phone.
+"""
+import math
+import os
+import re
+
+MAX_SEGMENTS = 2  # CONTEXT.md: keep suggestion text within one or two SMS segments
+
+# GSM 03.38 basic set: one septet each. Anything outside it (curly quotes, many accented
+# letters, emoji) pushes the whole message to UCS-2, where a segment holds only 70 characters.
+_GSM_BASIC = (
+    "@£$¥èéùìòÇ\nØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞÆæßÉ !\"#¤%&'()*+,-./0123456789:;<=>?"
+    "¡ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÑÜ§¿abcdefghijklmnopqrstuvwxyzäöñüà"
+)
+_GSM_EXTENDED = "^{}\\[~]|€"  # two septets each (escape + character)
+
+_PHONE = re.compile(r"^\+254[17]\d{8}$")
+SUCCESS_CODES = {100, 101, 102}  # Africa's Talking: Processed, Sent, Queued
+
+
+class SmsError(Exception):
+    """The message was refused before sending, or could not be sent."""
+
+
+def gsm_length(text):
+    """Septets needed to send `text` in the GSM alphabet, or None if it needs UCS-2."""
+    total = 0
+    for ch in text:
+        if ch in _GSM_BASIC:
+            total += 1
+        elif ch in _GSM_EXTENDED:
+            total += 2
+        else:
+            return None
+    return total
+
+
+def sms_segments(text):
+    """How many billable segments `text` takes. 0 for empty text."""
+    if not text:
+        return 0
+    septets = gsm_length(text)
+    if septets is not None:
+        return 1 if septets <= 160 else math.ceil(septets / 153)
+    return 1 if len(text) <= 70 else math.ceil(len(text) / 67)
+
+
+def check_sendable(phone, text):
+    """Raise SmsError if the number or message should not be sent. Returns the segment count."""
+    if not _PHONE.match(phone or ""):
+        raise SmsError(f"not a Kenyan mobile number in +254 format: {phone!r}")
+    if not text or not text.strip():
+        raise SmsError("empty message")
+    segments = sms_segments(text)
+    if segments > MAX_SEGMENTS:
+        raise SmsError(f"message takes {segments} segments; the limit is {MAX_SEGMENTS}")
+    return segments
+
+
+def make_client():
+    """The real Africa's Talking SMS service, from AT_USERNAME and AT_API_KEY."""
+    username, api_key = os.environ.get("AT_USERNAME"), os.environ.get("AT_API_KEY")
+    if not username or not api_key:
+        raise SmsError("AT_USERNAME and AT_API_KEY must be set")
+    import africastalking  # imported here so the rest of the app doesn't need the SDK
+
+    africastalking.initialize(username, api_key)
+    return africastalking.SMS
+
+
+def parse_response(response):
+    """Africa's Talking reply -> {ok, status, message_id, cost, detail}."""
+    try:
+        recipients = response["SMSMessageData"]["Recipients"]
+    except (KeyError, TypeError):
+        return {"ok": False, "status": "unreadable reply", "message_id": None, "cost": None, "detail": str(response)[:200]}
+    if not recipients:
+        message = (response.get("SMSMessageData") or {}).get("Message", "no recipients")
+        return {"ok": False, "status": "not accepted", "message_id": None, "cost": None, "detail": message}
+    r = recipients[0]
+    return {
+        "ok": r.get("statusCode") in SUCCESS_CODES,
+        "status": r.get("status", "unknown"),
+        "message_id": r.get("messageId"),
+        "cost": r.get("cost"),
+        "detail": str(r)[:200],
+    }
+
+
+def send_sms(phone, text, *, client=None, sender_id=None):
+    """Check a message, send it, and return the parsed result. Never logs; see send_to_farmer.
+
+    Raises SmsError if the message is refused before sending. A send that fails on the
+    network or at the provider comes back as ok=False, not as an exception, so one bad
+    number can't stop a whole batch.
+    """
+    check_sendable(phone, text)
+    client = client or make_client()
+    sender_id = sender_id if sender_id is not None else (os.environ.get("AT_SENDER_ID") or None)
+    try:
+        response = client.send(text, [phone], sender_id)
+    except Exception as e:  # network error, bad credentials, provider error
+        return {"ok": False, "status": "send error", "message_id": None, "cost": None, "detail": f"{type(e).__name__}: {e}"[:200]}
+    return parse_response(response)
+
+
+def send_to_farmer(farmer_id, phone, text, *, client=None, sender_id=None):
+    """Send and record the attempt in sms_log ('sent' or 'failed'). Returns the parsed result.
+
+    A message refused before sending (too long, bad number) is logged as 'failed' too, so
+    nothing a farmer should have received goes missing without a trace.
+    """
+    from src import db  # imported here so the pure helpers above work without a database
+
+    try:
+        result = send_sms(phone, text, client=client, sender_id=sender_id)
+    except SmsError as e:
+        result = {"ok": False, "status": "refused", "message_id": None, "cost": None, "detail": str(e)}
+    db.log_sms(farmer_id, text or "", status="sent" if result["ok"] else "failed", provider_ref=result["message_id"])
+    return result
