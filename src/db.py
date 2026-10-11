@@ -180,11 +180,41 @@ def get_budget(farmer_id, month: date):
 
 # --- sms ---------------------------------------------------------------------
 
-def log_sms(farmer_id, body, status="queued", provider_ref=None):
+def log_sms(farmer_id, body, status="queued", provider_ref=None, kind="other"):
     _query(
-        "INSERT INTO sms_log (farmer_id, body, status, provider_ref) VALUES (%s, %s, %s, %s)",
-        (farmer_id, body, status, provider_ref),
+        "INSERT INTO sms_log (farmer_id, body, status, provider_ref, kind) VALUES (%s, %s, %s, %s, %s)",
+        (farmer_id, body, status, provider_ref, kind),
     )
+
+
+def recent_sms(farmer_id, days=30):
+    """Messages sent (not failed) to a farmer in the last `days` days: kind and sent_at, newest first."""
+    return _query(
+        """
+        SELECT kind, sent_at FROM sms_log
+        WHERE farmer_id = %s AND status = 'sent' AND sent_at > now() - make_interval(days => %s)
+        ORDER BY sent_at DESC
+        """,
+        (farmer_id, days),
+    )
+
+
+def save_snapshot(farmer_id, taken_on, usable_days, decision_kind, effects_json, recent_kg_json):
+    """Store (or replace, for the same day) what the model believed about a farm."""
+    _query(
+        """
+        INSERT INTO model_snapshots (farmer_id, taken_on, usable_days, decision_kind, effects, recent_kg)
+        VALUES (%s, %s, %s, %s, %s::jsonb, %s::jsonb)
+        ON CONFLICT (farmer_id, taken_on) DO UPDATE
+            SET usable_days = EXCLUDED.usable_days, decision_kind = EXCLUDED.decision_kind,
+                effects = EXCLUDED.effects, recent_kg = EXCLUDED.recent_kg
+        """,
+        (farmer_id, taken_on, usable_days, decision_kind, effects_json, recent_kg_json),
+    )
+
+
+def list_snapshots(farmer_id):
+    return _query("SELECT * FROM model_snapshots WHERE farmer_id = %s ORDER BY taken_on", (farmer_id,))
 
 
 # --- farm setup: milk price, feed catalogue, cows in milk --------------------

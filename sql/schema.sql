@@ -90,3 +90,23 @@ CREATE TABLE IF NOT EXISTS herd_log (
     cows_in_milk   INTEGER NOT NULL CHECK (cows_in_milk >= 0),
     PRIMARY KEY (farmer_id, effective_date)
 );
+
+-- ---------------------------------------------------------------------------
+-- Daily SMS job: what kind of message each one was, and the language a farmer reads.
+-- ---------------------------------------------------------------------------
+ALTER TABLE sms_log ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'other'
+    CHECK (kind IN ('advice', 'nudge', 'other'));
+ALTER TABLE farmers ADD COLUMN IF NOT EXISTS language TEXT NOT NULL DEFAULT 'en'
+    CHECK (language IN ('en', 'sw'));
+
+-- Weekly snapshot of what the model believed, so "what changed" can be shown later.
+CREATE TABLE IF NOT EXISTS model_snapshots (
+    id            SERIAL PRIMARY KEY,
+    farmer_id     INTEGER NOT NULL REFERENCES farmers(id) ON DELETE CASCADE,
+    taken_on      DATE    NOT NULL,
+    usable_days   INTEGER NOT NULL,
+    decision_kind TEXT    NOT NULL,
+    effects       JSONB   NOT NULL,
+    recent_kg     JSONB   NOT NULL,
+    UNIQUE (farmer_id, taken_on)
+);
