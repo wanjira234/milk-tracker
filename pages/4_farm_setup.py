@@ -87,7 +87,8 @@ st.divider()
 st.subheader("Cows in milk")
 st.caption(
     "Update this whenever a cow calves or is dried off. Calving and drying off change the milk far more "
-    "than most feed changes, and the model needs to know about them or it will blame the feed."
+    "than most feed changes. If the herd changes on the same day as the feed and the app isn't told, "
+    "it can credit or blame the feed for what the cow did."
 )
 
 with st.form("cows_form"):
