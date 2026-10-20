@@ -7,8 +7,10 @@ import streamlit as st
 from src import db
 from src.trends import MILKINGS_PER_DAY, daily_frame, signals, summary
 from src.ui import farmer_selector
+from src.auth import require_login
 
 st.set_page_config(page_title="Dashboard", page_icon="🥛", layout="centered")
+require_login()
 st.title("Dashboard")
 
 farmer_id = farmer_selector()

@@ -7,8 +7,10 @@ import streamlit as st
 from src import db
 from src.ingestion.manual_entry import SESSIONS, record_feed, record_feed_units, record_yield
 from src.ui import cap, farmer_selector
+from src.auth import require_login
 
 st.set_page_config(page_title="Feed log", page_icon="🥛", layout="centered")
+require_login()
 st.title("Feed log")
 
 farmer_id = farmer_selector()

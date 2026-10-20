@@ -12,8 +12,10 @@ from src.budget import (
     project_month_spend,
 )
 from src.ui import farmer_selector
+from src.auth import require_login
 
 st.set_page_config(page_title="Budget", page_icon="🥛", layout="centered")
+require_login()
 st.title("Feed budget")
 
 
