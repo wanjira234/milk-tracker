@@ -6,8 +6,10 @@ import streamlit as st
 from src import db
 from src.ingestion.manual_entry import normalize_phone
 from src.ui import cap, farmer_selector
+from src.auth import require_login
 
 st.set_page_config(page_title="Milk Tracker", page_icon="🥛", layout="centered")
+require_login()
 
 st.title("Milk Tracker")
 st.caption("Yield and feed tracking for smallholder dairy farms.")

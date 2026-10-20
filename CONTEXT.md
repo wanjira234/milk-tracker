@@ -64,6 +64,7 @@ src/trends.py               Pure dashboard calculations (daily tables, summary, 
 src/budget.py               Pure budget maths (month-end projection, budget status, next-month estimate)
 src/models.py               Per-feed effect on litres per cow in milk (pure, no DB)
 src/suggestions.py          Turns model output into advice or a data nudge (pure, no DB)
+src/auth.py                 Password screen; every page calls require_login() right after set_page_config (APP_PASSWORD in .env or Streamlit secrets; unset = locked)
 src/loader.py               Loads one farmer's data, runs the model and rules; `python -m src.loader FARMER_ID` prints the result
 src/messages.py             Decision -> SMS facts, plain template (en; sw is a DRAFT), and the check that rejects a reworded SMS
 src/llm.py                  Claude (Haiku) rewords the template; falls back to the template on any problem

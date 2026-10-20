@@ -30,7 +30,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 cp .env.example .env        # then fill in your values
 psql "$DATABASE_URL" -f sql/schema.sql
-streamlit run app.py
+streamlit run app.py   # needs APP_PASSWORD in .env: it is the login password
 ```
 
 ## Project layout
