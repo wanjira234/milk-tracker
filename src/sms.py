@@ -111,7 +111,7 @@ def send_sms(phone, text, *, client=None, sender_id=None):
     return parse_response(response)
 
 
-def send_to_farmer(farmer_id, phone, text, *, client=None, sender_id=None):
+def send_to_farmer(farmer_id, phone, text, *, client=None, sender_id=None, kind="other"):
     """Send and record the attempt in sms_log ('sent' or 'failed'). Returns the parsed result.
 
     A message refused before sending (too long, bad number) is logged as 'failed' too, so
@@ -123,5 +123,5 @@ def send_to_farmer(farmer_id, phone, text, *, client=None, sender_id=None):
         result = send_sms(phone, text, client=client, sender_id=sender_id)
     except SmsError as e:
         result = {"ok": False, "status": "refused", "message_id": None, "cost": None, "detail": str(e)}
-    db.log_sms(farmer_id, text or "", status="sent" if result["ok"] else "failed", provider_ref=result["message_id"])
+    db.log_sms(farmer_id, text or "", status="sent" if result["ok"] else "failed", provider_ref=result["message_id"], kind=kind)
     return result
