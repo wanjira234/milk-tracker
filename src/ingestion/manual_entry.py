@@ -125,6 +125,64 @@ def record_water(farmer_id, log_date, amount, bucket=False):
     return {"log_date": log_date, "litres": litres}
 
 
+# --- cows: breeding, semen, deworming ------------------------------------------
+
+from src.breeding import KINDS, cow_status  # noqa: E402
+
+
+def record_cow(farmer_id, tag):
+    tag = " ".join(str(tag).split())
+    if not tag:
+        raise ValueError("enter the cow's name or tag number")
+    if len(tag) > 40:
+        raise ValueError("that name is too long")
+    return {"id": db.add_cow(farmer_id, tag), "tag": tag}
+
+
+def record_semen(farmer_id, name):
+    name = " ".join(str(name).split())
+    if not name:
+        raise ValueError("enter the bull name or breed")
+    if len(name) > 80:
+        raise ValueError("that name is too long")
+    return {"id": db.add_semen(farmer_id, name), "name": name}
+
+
+def record_breeding_event(farmer_id, cow_id, event_date, kind, semen_id=None, today=None):
+    """Validate against the cow's own history, then save.
+
+    A pregnancy result needs a service to refer to, and semen can only go with a service.
+    """
+    today = today or date.today()
+    if kind not in KINDS:
+        raise ValueError("choose what happened")
+    if event_date > today:
+        raise ValueError("date cannot be in the future")
+    if cow_id not in {c["id"] for c in db.list_cows(farmer_id)}:
+        raise ValueError("choose a cow from the list")
+    if kind != "served":
+        semen_id = None
+    elif semen_id is not None and semen_id not in {s["id"] for s in db.list_semen(farmer_id)}:
+        raise ValueError("choose the semen from the list")
+    if kind in ("confirmed_pregnant", "not_pregnant"):
+        history = db.breeding_events(farmer_id, cow_id)
+        if cow_status(history, event_date)["state"] not in ("served", "in_calf"):
+            raise ValueError("record the service first: a pregnancy result needs a service to refer to")
+    db.add_breeding_event(farmer_id, cow_id, event_date, kind, semen_id)
+    return {"cow_id": cow_id, "event_date": event_date, "kind": kind, "semen_id": semen_id}
+
+
+def record_deworming(farmer_id, given_on, cow_id=None, product=None, today=None):
+    today = today or date.today()
+    if given_on > today:
+        raise ValueError("date cannot be in the future")
+    if cow_id is not None and cow_id not in {c["id"] for c in db.list_cows(farmer_id)}:
+        raise ValueError("choose a cow from the list")
+    product = " ".join(str(product or "").split()) or None
+    db.add_deworming(farmer_id, given_on, cow_id, product)
+    return {"given_on": given_on, "cow_id": cow_id, "product": product}
+
+
 # --- farm setup --------------------------------------------------------------
 
 MAX_MILK_PRICE_KES = 500
