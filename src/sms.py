@@ -64,15 +64,63 @@ def check_sendable(phone, text):
     return segments
 
 
+class AfricasTalkingClient:
+    """Sends through Africa's Talking's HTTP API (the same request their SDK makes).
+
+    Why not the SDK: on some Windows laptops and networks, Python's secure connection to
+    api.sandbox.africastalking.com fails with SSL "WRONG_VERSION_NUMBER" while a browser works,
+    because the connection is offered TLS 1.3 and something in the path mishandles it.
+    Here the connection is capped at TLS 1.2, which Africa's Talking supports everywhere.
+    """
+
+    TIMEOUT = (3.05, 9.05)  # connect, read: seconds
+
+    def __init__(self, username, api_key, session=None):
+        self.username = username
+        self.url = (
+            "https://api.sandbox.africastalking.com" if username == "sandbox" else "https://api.africastalking.com"
+        ) + "/version1/messaging"
+        self.headers = {"Accept": "application/json", "apiKey": api_key}
+        self.session = session or self._tls12_session()
+
+    @staticmethod
+    def _tls12_session():
+        import ssl
+
+        import requests
+        from requests.adapters import HTTPAdapter
+
+        class Tls12Adapter(HTTPAdapter):
+            def init_poolmanager(self, *args, **kwargs):
+                context = ssl.create_default_context()
+                context.maximum_version = ssl.TLSVersion.TLSv1_2
+                kwargs["ssl_context"] = context
+                super().init_poolmanager(*args, **kwargs)
+
+        session = requests.Session()
+        session.mount("https://", Tls12Adapter())
+        return session
+
+    def send(self, message, recipients, sender_id=None):
+        """Same call as the SDK's SMS.send: returns the provider's JSON reply, or raises."""
+        data = {"username": self.username, "to": ",".join(recipients), "message": message, "bulkSMSMode": 1}
+        if sender_id:
+            data["from"] = sender_id
+        res = self.session.post(self.url, headers=self.headers, data=data, timeout=self.TIMEOUT)
+        if not 200 <= res.status_code < 300:
+            raise RuntimeError(f"Africa's Talking replied {res.status_code}: {res.text[:150]}")
+        try:
+            return res.json()
+        except ValueError:
+            raise RuntimeError(f"Africa's Talking sent an unreadable reply: {res.text[:150]}") from None
+
+
 def make_client():
-    """The real Africa's Talking SMS service, from AT_USERNAME and AT_API_KEY."""
+    """The real Africa's Talking sender, from AT_USERNAME and AT_API_KEY."""
     username, api_key = os.environ.get("AT_USERNAME"), os.environ.get("AT_API_KEY")
     if not username or not api_key:
         raise SmsError("AT_USERNAME and AT_API_KEY must be set")
-    import africastalking  # imported here so the rest of the app doesn't need the SDK
-
-    africastalking.initialize(username, api_key)
-    return africastalking.SMS
+    return AfricasTalkingClient(username, api_key)
 
 
 def parse_response(response):

@@ -70,3 +70,67 @@ def test_missing_credentials_are_reported(monkeypatch):
     monkeypatch.delenv("AT_API_KEY", raising=False)
     with pytest.raises(SmsError):
         sms.make_client()
+
+
+# --- the HTTP client (TLS 1.2 cap; no network) --------------------------------------
+
+import ssl  # noqa: E402
+
+from src.sms import AfricasTalkingClient  # noqa: E402
+
+
+class FakeSession:
+    def __init__(self, status=200, body=None, text=""):
+        self.status, self.body, self.text, self.calls = status, body, text, []
+
+    def post(self, url, headers, data, timeout):
+        self.calls.append((url, headers, data, timeout))
+        outer = self
+
+        class R:
+            status_code = outer.status
+            text = outer.text
+
+            def json(self_inner):
+                if outer.body is None:
+                    raise ValueError("not json")
+                return outer.body
+
+        return R()
+
+
+def test_the_client_sends_the_same_request_as_the_sdk_to_the_right_host():
+    s = FakeSession(body=OK_REPLY)
+    c = AfricasTalkingClient("sandbox", "KEY", session=s)
+    assert c.send("hello", ["+254700000001", "+254700000002"], "MILK") == OK_REPLY
+    url, headers, data, timeout = s.calls[0]
+    assert url == "https://api.sandbox.africastalking.com/version1/messaging"
+    assert headers["apiKey"] == "KEY" and headers["Accept"] == "application/json"
+    assert data == {"username": "sandbox", "to": "+254700000001,+254700000002", "message": "hello", "bulkSMSMode": 1, "from": "MILK"}
+    assert AfricasTalkingClient("someone", "K", session=s).url == "https://api.africastalking.com/version1/messaging"
+    s2 = FakeSession(body=OK_REPLY)
+    AfricasTalkingClient("sandbox", "K", session=s2).send("hi", ["+254700000001"])
+    assert "from" not in s2.calls[0][2]  # no sender id: not sent
+
+
+def test_provider_errors_and_unreadable_replies_raise_and_become_a_failed_result():
+    for session in (FakeSession(status=401, text="The supplied authentication is invalid"), FakeSession(text="<html>oops")):
+        c = AfricasTalkingClient("sandbox", "K", session=session)
+        with pytest.raises(RuntimeError):
+            c.send("hello", ["+254700000001"])
+        r = send_sms("+254700000001", "hello", client=c)
+        assert r["ok"] is False and r["status"] == "send error"
+    assert "401" in send_sms("+254700000001", "hello", client=AfricasTalkingClient("sandbox", "K", session=FakeSession(status=401, text="bad key")))["detail"]
+
+
+def test_the_real_session_is_capped_at_tls_1_2():
+    session = AfricasTalkingClient._tls12_session()
+    pool = session.get_adapter("https://api.sandbox.africastalking.com").poolmanager
+    assert pool.connection_pool_kw["ssl_context"].maximum_version == ssl.TLSVersion.TLSv1_2
+
+
+def test_make_client_builds_the_http_client_from_the_environment(monkeypatch):
+    monkeypatch.setenv("AT_USERNAME", "sandbox")
+    monkeypatch.setenv("AT_API_KEY", "k")
+    c = sms.make_client()
+    assert isinstance(c, AfricasTalkingClient) and "sandbox" in c.url
