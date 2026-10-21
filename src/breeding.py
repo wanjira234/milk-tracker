@@ -23,18 +23,22 @@ KINDS = {
     "not_pregnant": "Checked: not in calf",
     "calved": "Calved",
     "aborted": "Lost the calf",
+    "dried_off": "Dried off (stopped milking)",
 }
 
 
 def cow_status(events, today):
     """events = [{"event_date", "kind", "semen"}] for ONE cow, any order.
 
-    Returns {"state", "label", "next", "due"}:
+    Returns {"state", "label", "next", "due", "dry"}:
       state  open | served | in_calf | calved | new
       label  what to show as her status
       next   what to do or watch for next, in words (or None)
       due    expected calving date when served or in calf, else None
+      dry    True when she is in her dry period: dried off by hand, or in calf and within
+             60 days of the due date (a calving ends it)
     """
+    manual_dry = False
     last_heat = served_on = calved_on = None
     semen = None
     state = "new"
@@ -50,22 +54,27 @@ def cow_status(events, today):
         elif kind in ("not_pregnant", "aborted"):
             state, served_on = "open", None
         elif kind == "calved":
-            calved_on, state, served_on, last_heat = day, "calved", None, None
+            calved_on, state, served_on, last_heat, manual_dry = day, "calved", None, None, False
+        elif kind == "dried_off":
+            manual_dry = True
     fmt = lambda d: d.strftime("%d %b %Y")  # noqa: E731
 
+    def result(state, label, nxt, due=None, computed_dry=False):
+        return {"state": state, "label": label, "next": nxt, "due": due, "dry": manual_dry or computed_dry}
+
     if state == "new":
-        return {"state": state, "label": "No breeding records yet", "next": "Record her next heat or service.", "due": None}
+        return result(state, "No breeding records yet", "Record her next heat or service.")
     if state == "open":
         nxt = (
             f"Watch for heat about {fmt(last_heat + timedelta(days=HEAT_CYCLE_DAYS))}."
             if last_heat else "Watch for heat."
         )
-        return {"state": state, "label": "Not in calf", "next": nxt, "due": None}
+        return result(state, "Not in calf", nxt)
     if state == "calved":
         ready = calved_on + timedelta(days=SERVE_AFTER_CALVING_DAYS)
         label = f"Calved {fmt(calved_on)}"
         nxt = f"Usually ready to be served from about {fmt(ready)}." if ready > today else "Ready to be served: watch for heat."
-        return {"state": state, "label": label, "next": nxt, "due": None}
+        return result(state, label, nxt)
     due = served_on + timedelta(days=GESTATION_DAYS)
     with_semen = f" with {semen}" if semen else ""
     if state == "served":
@@ -76,16 +85,18 @@ def cow_status(events, today):
             nxt = f"No return to heat so far. Ask the vet to check for pregnancy from about {fmt(check)}."
         else:
             nxt = "Time to have the vet check for pregnancy, then record the result."
-        return {"state": state, "label": f"Served {fmt(served_on)}{with_semen}", "next": nxt, "due": due}
+        return result(state, f"Served {fmt(served_on)}{with_semen}", nxt, due)
     days = (due - today).days
     dry = due - timedelta(days=DRY_OFF_BEFORE_CALVING_DAYS)
-    if days < 0:
+    if manual_dry and today < dry:
+        nxt = f"Dried off early. Calving is expected about {fmt(due)}."
+    elif days < 0:
         nxt = f"Calving was expected about {fmt(due)}. Record the calving when it happens."
     elif today < dry:
         nxt = f"Dry off about {fmt(dry)}."
     else:
         nxt = "Dry period: she should be dry now. Prepare for calving."
-    return {"state": state, "label": f"In calf, due about {fmt(due)}{with_semen}", "next": nxt, "due": due}
+    return result(state, f"In calf, due about {fmt(due)}{with_semen}", nxt, due, computed_dry=today >= dry)
 
 
 def deworm_status(last_given, today):

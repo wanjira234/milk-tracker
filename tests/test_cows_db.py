@@ -13,9 +13,11 @@ from src import db  # noqa: E402
 from src.breeding import cow_status  # noqa: E402
 from src.ingestion.manual_entry import (  # noqa: E402
     record_breeding_event,
+    record_calving,
     record_cow,
     record_deworming,
     record_semen,
+    record_weaning,
 )
 
 TODAY = date(2026, 10, 21)
@@ -106,3 +108,86 @@ def test_a_mistaken_event_can_be_deleted(farm):
     record_breeding_event(fid, cow, TODAY, "heat", today=TODAY)
     db.delete_breeding_event(fid, db.breeding_events(fid, cow)[0]["id"])
     assert db.breeding_events(fid, cow) == []
+
+
+def by_tag(fid):
+    return {c["tag"]: c for c in db.list_cows(fid)}
+
+
+def test_a_calving_adds_a_calf_linked_to_its_mother(farm):
+    fid, cow, _ = farm
+    out = record_calving(fid, cow, TODAY - timedelta(days=10), "Nyota", "female", today=TODAY)
+    animals = by_tag(fid)
+    assert out["calf"]["tag"] == "Nyota"
+    assert animals["Nyota"]["kind"] == "calf" and animals["Nyota"]["dam_id"] == cow
+    assert animals["Nyota"]["born_on"] == TODAY - timedelta(days=10) and animals["Nyota"]["sex"] == "female"
+    assert cow_status(db.breeding_events(fid, cow), TODAY)["state"] == "calved"
+
+
+def test_a_first_calving_turns_a_heifer_into_a_cow(farm):
+    fid, _, _ = farm
+    heifer = record_cow(fid, "Zawadi", "heifer")["id"]
+    record_calving(fid, heifer, TODAY, today=TODAY)  # no calf named: just the calving
+    assert by_tag(fid)["Zawadi"]["kind"] == "cow" and len(db.list_cows(fid)) == 2
+
+
+def test_weaning_a_female_calf_makes_her_a_heifer_and_a_male_stays_a_calf(farm):
+    fid, cow, _ = farm
+    record_calving(fid, cow, TODAY - timedelta(days=120), "Nyota", "female", today=TODAY)
+    record_calving(fid, cow, TODAY - timedelta(days=119), "Simba", "male", today=TODAY)
+    animals = by_tag(fid)
+    assert record_weaning(fid, animals["Nyota"]["id"], TODAY - timedelta(days=10), today=TODAY)["became"] == "heifer"
+    assert record_weaning(fid, animals["Simba"]["id"], TODAY - timedelta(days=10), today=TODAY)["became"] == "calf"
+    animals = by_tag(fid)
+    assert animals["Nyota"]["kind"] == "heifer" and animals["Simba"]["kind"] == "calf" and animals["Simba"]["weaned_on"]
+    with pytest.raises(ValueError, match="already weaned"):
+        record_weaning(fid, animals["Simba"]["id"], TODAY, today=TODAY)
+
+
+def test_weaning_dates_are_checked(farm):
+    fid, cow, _ = farm
+    record_calving(fid, cow, TODAY - timedelta(days=30), "Nyota", today=TODAY)
+    calf = by_tag(fid)["Nyota"]["id"]
+    with pytest.raises(ValueError, match="before the birth"):
+        record_weaning(fid, calf, TODAY - timedelta(days=31), today=TODAY)
+    with pytest.raises(ValueError, match="future"):
+        record_weaning(fid, calf, TODAY + timedelta(days=1), today=TODAY)
+    with pytest.raises(ValueError, match="still on milk"):
+        record_weaning(fid, cow, TODAY, today=TODAY)
+
+
+def test_a_mother_must_be_a_cow_on_the_same_farm(farm):
+    fid, cow, _ = farm
+    other = db.add_farmer("Other", "+254700000002")
+    with pytest.raises(ValueError, match="mother"):
+        record_cow(other, "Calf", "calf", dam_id=cow)
+    heifer = record_cow(fid, "Zawadi", "heifer")["id"]
+    with pytest.raises(ValueError, match="mother"):
+        record_cow(fid, "Calf", "calf", dam_id=heifer)
+    with pytest.raises(Exception):  # the database refuses it too
+        db.add_cow(other, "Calf", "calf", "female", dam_id=cow)
+
+
+def test_a_calf_has_no_breeding_records_and_cannot_calve(farm):
+    fid, cow, _ = farm
+    record_calving(fid, cow, TODAY - timedelta(days=30), "Nyota", today=TODAY)
+    calf = by_tag(fid)["Nyota"]["id"]
+    with pytest.raises(ValueError, match="weaning"):
+        record_breeding_event(fid, calf, TODAY, "heat", today=TODAY)
+    with pytest.raises(ValueError, match="weaning"):
+        record_calving(fid, calf, TODAY, today=TODAY)
+
+
+def test_a_calf_name_already_in_use_is_refused_before_anything_is_saved(farm):
+    fid, cow, _ = farm
+    with pytest.raises(ValueError, match="already have"):
+        record_calving(fid, cow, TODAY, "Wanjiku", today=TODAY)
+    assert db.breeding_events(fid, cow) == []
+
+
+def test_dried_off_is_recorded_and_ends_at_the_next_calving(farm):
+    fid, cow, _ = farm
+    record_breeding_event(fid, cow, TODAY - timedelta(days=5), "dried_off", today=TODAY)
+    assert cow_status(db.breeding_events(fid, cow), TODAY)["dry"]
+    record_calving(fid, cow, TODAY, today=TODAY)
+    assert not cow_status(db.breeding_events(fid, cow), TODAY)["dry"]

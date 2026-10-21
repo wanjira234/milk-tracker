@@ -130,13 +130,68 @@ def record_water(farmer_id, log_date, amount, bucket=False):
 from src.breeding import KINDS, cow_status  # noqa: E402
 
 
-def record_cow(farmer_id, tag):
+ANIMAL_KINDS = ("cow", "heifer", "calf")
+
+
+def record_cow(farmer_id, tag, kind="cow", sex="female", dam_id=None, born_on=None, today=None):
+    """Add a cow, heifer or calf. A mother, if given, must be a cow on this farm."""
+    today = today or date.today()
     tag = " ".join(str(tag).split())
     if not tag:
-        raise ValueError("enter the cow's name or tag number")
+        raise ValueError("enter the name or tag number")
     if len(tag) > 40:
         raise ValueError("that name is too long")
-    return {"id": db.add_cow(farmer_id, tag), "tag": tag}
+    if kind not in ANIMAL_KINDS:
+        raise ValueError("choose cow, heifer or calf")
+    if sex not in ("female", "male"):
+        raise ValueError("choose female or male")
+    if kind != "calf":
+        sex = "female"
+    if born_on is not None and born_on > today:
+        raise ValueError("birth date cannot be in the future")
+    if dam_id is not None:
+        mothers = {c["id"]: c for c in db.list_cows(farmer_id)}
+        if dam_id not in mothers or mothers[dam_id]["kind"] != "cow":
+            raise ValueError("choose the mother from your cows")
+    return {"id": db.add_cow(farmer_id, tag, kind, sex, dam_id, born_on), "tag": tag, "kind": kind}
+
+
+def record_weaning(farmer_id, calf_id, weaned_on, today=None):
+    """A calf stops taking milk. A female calf becomes a heifer."""
+    today = today or date.today()
+    calves = {c["id"]: c for c in db.list_cows(farmer_id) if c["kind"] == "calf"}
+    if calf_id not in calves:
+        raise ValueError("choose a calf that is still on milk")
+    calf = calves[calf_id]
+    if calf["weaned_on"]:
+        raise ValueError("this calf is already weaned")
+    if weaned_on > today:
+        raise ValueError("date cannot be in the future")
+    if calf["born_on"] and weaned_on < calf["born_on"]:
+        raise ValueError("weaning cannot be before the birth date")
+    db.set_weaned(farmer_id, calf_id, weaned_on, kind="heifer" if calf["sex"] == "female" else None)
+    return {"calf_id": calf_id, "weaned_on": weaned_on, "became": "heifer" if calf["sex"] == "female" else "calf"}
+
+
+def record_calving(farmer_id, dam_id, calving_date, calf_tag=None, calf_sex="female", today=None):
+    """Record a calving. The mother becomes a cow (if she was a heifer); a named calf is added to the herd,
+    linked to her."""
+    today = today or date.today()
+    mother = next((c for c in db.list_cows(farmer_id) if c["id"] == dam_id), None)
+    if mother is None:
+        raise ValueError("choose a cow from the list")
+    if mother["kind"] == "calf":
+        raise ValueError("a calf cannot calve: record her weaning first")
+    calf_tag = " ".join(str(calf_tag or "").split()) or None
+    if calf_tag and any(c["tag"] == calf_tag for c in db.list_cows(farmer_id, active_only=False)):
+        raise ValueError(f"you already have an animal called {calf_tag}: choose another name for the calf")
+    record_breeding_event(farmer_id, dam_id, calving_date, "calved", today=today)
+    if mother["kind"] == "heifer":
+        db.set_cow_kind(farmer_id, dam_id, "cow")
+    calf = None
+    if calf_tag:
+        calf = record_cow(farmer_id, calf_tag, "calf", calf_sex, dam_id=dam_id, born_on=calving_date, today=today)
+    return {"dam_id": dam_id, "calving_date": calving_date, "calf": calf}
 
 
 def record_semen(farmer_id, name):
@@ -158,8 +213,11 @@ def record_breeding_event(farmer_id, cow_id, event_date, kind, semen_id=None, to
         raise ValueError("choose what happened")
     if event_date > today:
         raise ValueError("date cannot be in the future")
-    if cow_id not in {c["id"] for c in db.list_cows(farmer_id)}:
+    animals = {c["id"]: c for c in db.list_cows(farmer_id)}
+    if cow_id not in animals:
         raise ValueError("choose a cow from the list")
+    if animals[cow_id]["kind"] == "calf":
+        raise ValueError("a calf has no breeding records: record her weaning first")
     if kind != "served":
         semen_id = None
     elif semen_id is not None and semen_id not in {s["id"] for s in db.list_semen(farmer_id)}:

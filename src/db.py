@@ -138,23 +138,35 @@ def daily_water(farmer_id, start, end):
 
 # --- cows: breeding, semen, deworming ------------------------------------------
 
-def add_cow(farmer_id, tag):
-    """Add a cow (or bring a retired one back). Returns her id."""
+def add_cow(farmer_id, tag, kind="cow", sex="female", dam_id=None, born_on=None):
+    """Add an animal (or bring a retired one back; an existing animal keeps her details). Returns her id."""
     return _query(
         """
-        INSERT INTO cows (farmer_id, tag) VALUES (%s, %s)
+        INSERT INTO cows (farmer_id, tag, kind, sex, dam_id, born_on) VALUES (%s, %s, %s, %s, %s, %s)
         ON CONFLICT (farmer_id, tag) DO UPDATE SET active = TRUE
         RETURNING id
         """,
-        (farmer_id, tag), one=True,
+        (farmer_id, tag, kind, sex, dam_id, born_on), one=True,
     )["id"]
 
 
 def list_cows(farmer_id, active_only=True):
-    sql = "SELECT id, tag, active FROM cows WHERE farmer_id = %s"
+    sql = "SELECT id, tag, active, kind, sex, dam_id, born_on, weaned_on FROM cows WHERE farmer_id = %s"
     if active_only:
         sql += " AND active"
     return _query(sql + " ORDER BY tag", (farmer_id,))
+
+
+def set_cow_kind(farmer_id, cow_id, kind):
+    _query("UPDATE cows SET kind = %s WHERE id = %s AND farmer_id = %s", (kind, cow_id, farmer_id))
+
+
+def set_weaned(farmer_id, cow_id, weaned_on, kind=None):
+    """Record weaning; kind (e.g. 'heifer') changes her stage in the same step."""
+    _query(
+        "UPDATE cows SET weaned_on = %s, kind = COALESCE(%s, kind) WHERE id = %s AND farmer_id = %s",
+        (weaned_on, kind, cow_id, farmer_id),
+    )
 
 
 def retire_cow(farmer_id, cow_id):
