@@ -67,6 +67,7 @@ src/suggestions.py          Turns model output into advice or a data nudge (pure
 src/calculator.py           Feed calculator: truck load / tilly / mtungi / bucket -> price per kg and per measure (estimates)
 src/profit.py               Profit = milk income minus feed cost, complete days only (feed margin, not full profit)
 src/water.py                Water summary (litres per day, per cow in milk)
+src/breeding.py             Where each cow is in her cycle (heat, served, in calf, calved) and deworming due dates; typical-figure estimates
 src/auth.py                 Password screen; every page calls require_login() right after set_page_config (APP_PASSWORD in .env or Streamlit secrets; unset = locked)
 src/loader.py               Loads one farmer's data, runs the model and rules; `python -m src.loader FARMER_ID` prints the result
 src/messages.py             Decision -> SMS facts, plain template (en; sw is a DRAFT), and the check that rejects a reworded SMS
@@ -137,3 +138,4 @@ tests/test_suggestions.py   Tests for the suggestion logic
 - Still to build: a "what changed" before/after view, switching the dashboard signal to the real model, farmer signup.
 - Open question for the owner: whether an SMS may suggest a deliberate small variation of a feed so the model can learn. Not done: it is feed advice, which the agreed rules reserve for when the evidence exists.
 - Farm-facing additions (2026-10-21): feed calculator on farm setup, profit panel and water metrics on the dashboard, daily water total (litres, 20 L buckets) on the feed log (`water_logs` table: re-run sql/schema.sql in Supabase). Planned next, in this order: per-cow records (in calf, last in heat, semen/AI chosen from a semen list, deworming every 3 months), admin notices (outbreaks/vaccination by area, delivered by SMS), then SMS-code or email+password login chosen by the farmer.
+- Per-cow records (2026-10-21): pages/5_cows.py, tables cows / semen_options / breeding_events / dewormings (re-run sql/schema.sql in Supabase). Every link carries farmer_id, so the database refuses another farm's cow or semen. Calving does NOT change cows-in-milk automatically; the page reminds the farmer. Next: admin notices (outbreaks/vaccination by area, SMS), then farmer-chosen login (SMS code or email+password). Not built yet: SMS reminders for heat/deworming/dry-off.

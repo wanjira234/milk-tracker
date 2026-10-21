@@ -120,3 +120,51 @@ CREATE TABLE IF NOT EXISTS water_logs (
     litres     NUMERIC(8,1) NOT NULL CHECK (litres > 0),
     PRIMARY KEY (farmer_id, log_date)
 );
+
+-- ---------------------------------------------------------------------------
+-- Per-cow records: the cows, breeding events, the semen the farm can choose from,
+-- and deworming. Every link carries the farmer id too, so a record can never point
+-- at another farm's cow or semen.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS cows (
+    id         SERIAL PRIMARY KEY,
+    farmer_id  INTEGER NOT NULL REFERENCES farmers(id) ON DELETE CASCADE,
+    tag        TEXT    NOT NULL,              -- the name or ear-tag number the farm uses
+    active     BOOLEAN NOT NULL DEFAULT TRUE, -- false = sold or died; history is kept
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (farmer_id, tag),
+    UNIQUE (id, farmer_id)
+);
+
+CREATE TABLE IF NOT EXISTS semen_options (
+    id         SERIAL PRIMARY KEY,
+    farmer_id  INTEGER NOT NULL REFERENCES farmers(id) ON DELETE CASCADE,
+    name       TEXT    NOT NULL,              -- bull name or breed, e.g. "Friesian - Kamau"
+    active     BOOLEAN NOT NULL DEFAULT TRUE,
+    UNIQUE (farmer_id, name),
+    UNIQUE (id, farmer_id)
+);
+
+CREATE TABLE IF NOT EXISTS breeding_events (
+    id          SERIAL PRIMARY KEY,
+    farmer_id   INTEGER NOT NULL,
+    cow_id      INTEGER NOT NULL,
+    event_date  DATE    NOT NULL,
+    kind        TEXT    NOT NULL CHECK (kind IN ('heat', 'served', 'confirmed_pregnant', 'not_pregnant', 'calved', 'aborted')),
+    semen_id    INTEGER,                      -- only for 'served'
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+    FOREIGN KEY (cow_id, farmer_id)   REFERENCES cows (id, farmer_id)           ON DELETE CASCADE,
+    FOREIGN KEY (semen_id, farmer_id) REFERENCES semen_options (id, farmer_id),
+    CHECK (semen_id IS NULL OR kind = 'served')
+);
+CREATE INDEX IF NOT EXISTS idx_breeding_cow_date ON breeding_events (cow_id, event_date);
+
+CREATE TABLE IF NOT EXISTS dewormings (
+    id         SERIAL PRIMARY KEY,
+    farmer_id  INTEGER NOT NULL REFERENCES farmers(id) ON DELETE CASCADE,
+    cow_id     INTEGER,                       -- NULL = the whole herd was dewormed
+    given_on   DATE    NOT NULL,
+    product    TEXT,
+    FOREIGN KEY (cow_id, farmer_id) REFERENCES cows (id, farmer_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_deworm_farmer_date ON dewormings (farmer_id, given_on);

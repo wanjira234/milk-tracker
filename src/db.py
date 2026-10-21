@@ -136,6 +136,96 @@ def daily_water(farmer_id, start, end):
     )
 
 
+# --- cows: breeding, semen, deworming ------------------------------------------
+
+def add_cow(farmer_id, tag):
+    """Add a cow (or bring a retired one back). Returns her id."""
+    return _query(
+        """
+        INSERT INTO cows (farmer_id, tag) VALUES (%s, %s)
+        ON CONFLICT (farmer_id, tag) DO UPDATE SET active = TRUE
+        RETURNING id
+        """,
+        (farmer_id, tag), one=True,
+    )["id"]
+
+
+def list_cows(farmer_id, active_only=True):
+    sql = "SELECT id, tag, active FROM cows WHERE farmer_id = %s"
+    if active_only:
+        sql += " AND active"
+    return _query(sql + " ORDER BY tag", (farmer_id,))
+
+
+def retire_cow(farmer_id, cow_id):
+    """Sold or died: hide her from the lists. Her history stays."""
+    _query("UPDATE cows SET active = FALSE WHERE id = %s AND farmer_id = %s", (cow_id, farmer_id))
+
+
+def add_semen(farmer_id, name):
+    return _query(
+        """
+        INSERT INTO semen_options (farmer_id, name) VALUES (%s, %s)
+        ON CONFLICT (farmer_id, name) DO UPDATE SET active = TRUE
+        RETURNING id
+        """,
+        (farmer_id, name), one=True,
+    )["id"]
+
+
+def list_semen(farmer_id, active_only=True):
+    sql = "SELECT id, name, active FROM semen_options WHERE farmer_id = %s"
+    if active_only:
+        sql += " AND active"
+    return _query(sql + " ORDER BY name", (farmer_id,))
+
+
+def retire_semen(farmer_id, semen_id):
+    _query("UPDATE semen_options SET active = FALSE WHERE id = %s AND farmer_id = %s", (semen_id, farmer_id))
+
+
+def add_breeding_event(farmer_id, cow_id, event_date, kind, semen_id=None):
+    """The database refuses a cow or semen that belongs to another farm."""
+    _query(
+        "INSERT INTO breeding_events (farmer_id, cow_id, event_date, kind, semen_id) VALUES (%s, %s, %s, %s, %s)",
+        (farmer_id, cow_id, event_date, kind, semen_id),
+    )
+
+
+def breeding_events(farmer_id, cow_id=None):
+    """[{cow_id, event_date, kind, semen}] oldest first (semen = its name, or None)."""
+    sql = """
+        SELECT b.id, b.cow_id, b.event_date, b.kind, s.name AS semen
+        FROM breeding_events b LEFT JOIN semen_options s ON s.id = b.semen_id
+        WHERE b.farmer_id = %s
+    """
+    args = [farmer_id]
+    if cow_id is not None:
+        sql += " AND b.cow_id = %s"
+        args.append(cow_id)
+    return _query(sql + " ORDER BY b.event_date, b.id", tuple(args))
+
+
+def delete_breeding_event(farmer_id, event_id):
+    """For fixing a mistake."""
+    _query("DELETE FROM breeding_events WHERE id = %s AND farmer_id = %s", (event_id, farmer_id))
+
+
+def add_deworming(farmer_id, given_on, cow_id=None, product=None):
+    """cow_id None = the whole herd."""
+    _query(
+        "INSERT INTO dewormings (farmer_id, cow_id, given_on, product) VALUES (%s, %s, %s, %s)",
+        (farmer_id, cow_id, given_on, product),
+    )
+
+
+def dewormings(farmer_id):
+    """[{cow_id (None = whole herd), given_on, product}] oldest first."""
+    return _query(
+        "SELECT cow_id, given_on, product FROM dewormings WHERE farmer_id = %s ORDER BY given_on, id", (farmer_id,)
+    )
+
+
 # --- budget ------------------------------------------------------------------
 
 def month_start(d: date) -> date:

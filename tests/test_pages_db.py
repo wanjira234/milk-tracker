@@ -88,3 +88,34 @@ def test_water_logged_in_buckets_is_saved_in_litres_and_shown_on_the_dashboard()
     dash = page("pages/1_dashboard.py")
     assert not dash.exception
     assert {m.label: m.value for m in dash.metric}["Water per cow in milk"] == "24 L"  # 120 L / 5 cows
+
+
+def test_the_cows_page_adds_a_cow_records_a_service_and_shows_her_status():
+    fid = db.add_farmer("Sim", "+254700000001")
+    db.add_semen(fid, "Friesian - Kamau")
+    at = page("pages/5_cows.py")
+    at.text_input(key="new_cow").set_value("Wanjiku")
+    next(b for b in at.button if b.key == "add_cow").click()
+    at.run()
+    assert not at.exception and [c["tag"] for c in db.list_cows(fid)] == ["Wanjiku"]
+    at.selectbox(key="ev_kind").set_value("served")
+    at.run()
+    assert at.selectbox(key="ev_semen").options  # the semen list appears once a service is chosen
+    at.date_input(key="ev_date").set_value(date.today() - timedelta(days=30))
+    next(b for b in at.button if b.key == "ev_save").click()
+    at.run()
+    assert not at.exception
+    text = " ".join(m.value for m in at.markdown) + " ".join(c.value for c in at.caption)
+    assert "Wanjiku" in text and "Served" in text and "Friesian - Kamau" in text
+    assert "Deworming: Never recorded" in text
+    assert any("Saved" in s.value for s in at.success)  # the message survives the reload
+
+
+def test_the_cows_page_refuses_a_pregnancy_result_with_no_service():
+    fid = db.add_farmer("Sim", "+254700000001")
+    db.add_cow(fid, "Wanjiku")
+    at = page("pages/5_cows.py")
+    at.selectbox(key="ev_kind").set_value("confirmed_pregnant")
+    next(b for b in at.button if b.key == "ev_save").click()
+    at.run()
+    assert any("service first" in e.value for e in at.error) and db.breeding_events(fid) == []
