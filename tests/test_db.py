@@ -171,3 +171,13 @@ def test_send_to_farmer_logs_success_failure_and_refusal(farmer):
     rows = db._query("SELECT body, status, provider_ref FROM sms_log ORDER BY id")
     assert [(r["body"], r["status"]) for r in rows] == [("hello", "sent"), ("again", "failed"), ("refused", "failed")]
     assert rows[0]["provider_ref"] == "ATX1"
+
+
+def test_water_is_one_total_per_day_and_replaced_when_saved_again(farmer):
+    db.set_water(farmer, date(2026, 10, 1), 100)
+    db.set_water(farmer, date(2026, 10, 1), 140)
+    db.set_water(farmer, date(2026, 10, 2), 90.5)
+    rows = db.daily_water(farmer, date(2026, 10, 1), date(2026, 10, 31))
+    assert [(str(r["log_date"]), float(r["litres"])) for r in rows] == [("2026-10-01", 140.0), ("2026-10-02", 90.5)]
+    with pytest.raises(Exception):
+        db.set_water(farmer, date(2026, 10, 3), 0)

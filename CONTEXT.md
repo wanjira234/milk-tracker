@@ -64,6 +64,9 @@ src/trends.py               Pure dashboard calculations (daily tables, summary, 
 src/budget.py               Pure budget maths (month-end projection, budget status, next-month estimate)
 src/models.py               Per-feed effect on litres per cow in milk (pure, no DB)
 src/suggestions.py          Turns model output into advice or a data nudge (pure, no DB)
+src/calculator.py           Feed calculator: truck load / tilly / mtungi / bucket -> price per kg and per measure (estimates)
+src/profit.py               Profit = milk income minus feed cost, complete days only (feed margin, not full profit)
+src/water.py                Water summary (litres per day, per cow in milk)
 src/auth.py                 Password screen; every page calls require_login() right after set_page_config (APP_PASSWORD in .env or Streamlit secrets; unset = locked)
 src/loader.py               Loads one farmer's data, runs the model and rules; `python -m src.loader FARMER_ID` prints the result
 src/messages.py             Decision -> SMS facts, plain template (en; sw is a DRAFT), and the check that rejects a reworded SMS
@@ -133,3 +136,4 @@ tests/test_suggestions.py   Tests for the suggestion logic
 - Jobs done (218 tests): `src/dispatch.py` has `run_daily` (assess, facts, min gain KES 10/day, throttle, Haiku wording, send, log; `send=False` is a dry run) and `run_weekly_snapshot` (-> `model_snapshots`). Throttle: 1 SMS per farmer per day; advice every 14 days; nudge every 7; only SENT messages count (a failed send is retried next day). Days are Nairobi days. `modal_jobs/daily_sms_dispatch.py` (05:00 UTC) and `weekly_retrain.py` (Mon 04:00 UTC) are thin schedules reading one Modal secret `milk-tracker`. The Modal files were NOT deployed or run (no Modal account in the sandbox). Schema gained `sms_log.kind`, `farmers.language`, `model_snapshots`: re-run sql/schema.sql on any existing database.
 - Still to build: a "what changed" before/after view, switching the dashboard signal to the real model, farmer signup.
 - Open question for the owner: whether an SMS may suggest a deliberate small variation of a feed so the model can learn. Not done: it is feed advice, which the agreed rules reserve for when the evidence exists.
+- Farm-facing additions (2026-10-21): feed calculator on farm setup, profit panel and water metrics on the dashboard, daily water total (litres, 20 L buckets) on the feed log (`water_logs` table: re-run sql/schema.sql in Supabase). Planned next, in this order: per-cow records (in calf, last in heat, semen/AI chosen from a semen list, deworming every 3 months), admin notices (outbreaks/vaccination by area, delivered by SMS), then SMS-code or email+password login chosen by the farmer.

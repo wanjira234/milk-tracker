@@ -95,6 +95,36 @@ def record_feed(farmer_id, log_date, feed_type, kg, cost_kes=None):
     return {"log_date": log_date, "feed_type": feed_type, "kg": kg, "cost_kes": cost}
 
 
+# --- water -------------------------------------------------------------------
+
+BUCKET_LITRES = 20.0
+MAX_WATER_LITRES = 20000
+
+
+def validate_water(log_date, amount, bucket=False, today=None):
+    """(log_date, litres) for a day's water. `amount` is litres, or number of 20 L buckets if bucket=True."""
+    today = today or date.today()
+    if log_date > today:
+        raise ValueError("date cannot be in the future")
+    try:
+        amount = float(amount)
+    except (TypeError, ValueError):
+        raise ValueError("water must be a number") from None
+    if amount != amount or amount <= 0:
+        raise ValueError("water must be greater than zero")
+    litres = round(amount * BUCKET_LITRES if bucket else amount, 1)
+    if litres > MAX_WATER_LITRES:
+        raise ValueError(f"water looks too high (over {MAX_WATER_LITRES:,} litres); check for a typo")
+    return log_date, litres
+
+
+def record_water(farmer_id, log_date, amount, bucket=False):
+    """Validate and save the day's total water. Returns the cleaned values."""
+    log_date, litres = validate_water(log_date, amount, bucket)
+    db.set_water(farmer_id, log_date, litres)
+    return {"log_date": log_date, "litres": litres}
+
+
 # --- farm setup --------------------------------------------------------------
 
 MAX_MILK_PRICE_KES = 500

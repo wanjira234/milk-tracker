@@ -115,6 +115,27 @@ def daily_feed(farmer_id, start, end):
     )
 
 
+# --- water -------------------------------------------------------------------
+
+def set_water(farmer_id, log_date, litres):
+    """Set the herd's total water for a day (saving the same day again replaces it)."""
+    _query(
+        """
+        INSERT INTO water_logs (farmer_id, log_date, litres) VALUES (%s, %s, %s)
+        ON CONFLICT (farmer_id, log_date) DO UPDATE SET litres = EXCLUDED.litres
+        """,
+        (farmer_id, log_date, litres),
+    )
+
+
+def daily_water(farmer_id, start, end):
+    """[{log_date, litres}] oldest first."""
+    return _query(
+        "SELECT log_date, litres FROM water_logs WHERE farmer_id = %s AND log_date BETWEEN %s AND %s ORDER BY log_date",
+        (farmer_id, start, end),
+    )
+
+
 # --- budget ------------------------------------------------------------------
 
 def month_start(d: date) -> date:

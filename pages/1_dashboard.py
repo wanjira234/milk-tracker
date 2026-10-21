@@ -5,6 +5,8 @@ from itertools import cycle
 import streamlit as st
 
 from src import db
+from src.profit import profit_summary
+from src.water import water_summary
 from src.trends import MILKINGS_PER_DAY, daily_frame, signals, summary
 from src.ui import farmer_selector
 from src.auth import require_login
@@ -39,6 +41,42 @@ c3, c4 = st.columns(2)
 c3.metric("Feed spend", f"KES {stats['total_cost']:,.0f}")
 cpl = stats["cost_per_litre"]
 c4.metric("Feed cost per litre", f"KES {cpl:,.1f}" if cpl is not None else "n/a")
+
+water = water_summary(db.daily_water(farmer_id, start, today), db.cows_in_milk_on(farmer_id, today))
+if water:
+    w1, w2 = st.columns(2)
+    w1.metric("Water per day", f"{water['avg_per_day']:,.0f} L", help=f"Average over the {water['days']} day(s) it was recorded")
+    w2.metric("Water per cow in milk", f"{water['per_cow']:,.0f} L" if water["per_cow"] is not None else "n/a")
+
+st.subheader("Profit")
+price_now = db.get_milk_price(farmer_id)
+feed_rows = db.daily_feed(farmer_id, start, today)
+profit = profit_summary(daily, price_now, uncosted=sum(1 for r in feed_rows if r["cost_kes"] is None))
+if profit is None:
+    st.caption("Set the milk price on the farm setup page, and record complete days, to see your profit here.")
+else:
+    st.markdown(
+        f"On **{profit['days']} complete days** you sold **{profit['litres']:,.0f} litres** at "
+        f"KES {float(price_now):,.0f}, which is **KES {profit['income']:,.0f}**. "
+        f"Feed cost **KES {profit['feed_cost']:,.0f}**."
+    )
+    p1, p2, p3 = st.columns(3)
+    p1.metric("Left after feed", f"KES {profit['profit']:,.0f}")
+    p2.metric("Per day", f"KES {profit['profit_per_day']:,.0f}")
+    p3.metric("Per litre", f"KES {profit['profit_per_litre']:,.1f}" if profit["profit_per_litre"] is not None else "n/a")
+    if profit["feed_per_100"] is not None:
+        st.write(f"Out of every KES 100 of milk, **KES {profit['feed_per_100']:,.0f}** went on feed.")
+    if profit["profit"] < 0:
+        st.warning("Feed cost more than the milk earned in this period.")
+    st.caption(
+        "This is milk income minus feed only. Labour, vet, water and other costs are not counted. "
+        "Only days with all 3 milkings are included."
+    )
+    if profit["uncosted"]:
+        st.caption(
+            f"{profit['uncosted']} feed entries have no price, so their cost is missing and the real figure is lower. "
+            "Add prices on the farm setup page."
+        )
 
 if stats["partial_days"]:
     st.caption(
