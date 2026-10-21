@@ -123,10 +123,17 @@ def test_provider_errors_and_unreadable_replies_raise_and_become_a_failed_result
     assert "401" in send_sms("+254700000001", "hello", client=AfricasTalkingClient("sandbox", "K", session=FakeSession(status=401, text="bad key")))["detail"]
 
 
-def test_the_real_session_is_capped_at_tls_1_2():
-    session = AfricasTalkingClient._tls12_session()
-    pool = session.get_adapter("https://api.sandbox.africastalking.com").poolmanager
-    assert pool.connection_pool_kw["ssl_context"].maximum_version == ssl.TLSVersion.TLSv1_2
+def test_the_real_session_verifies_certifi_without_the_ca_certs_option():
+    adapter = AfricasTalkingClient._verified_session().get_adapter("https://api.sandbox.africastalking.com")
+    context = adapter.poolmanager.connection_pool_kw["ssl_context"]
+    assert context.verify_mode == ssl.CERT_REQUIRED and context.check_hostname
+
+    class Conn:
+        pass
+
+    conn = Conn()
+    adapter.cert_verify(conn, "https://api.sandbox.africastalking.com", True, None)
+    assert not hasattr(conn, "ca_certs")  # requests' default would set this and break the TLS handshake
 
 
 def test_make_client_builds_the_http_client_from_the_environment(monkeypatch):

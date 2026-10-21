@@ -67,10 +67,11 @@ def check_sendable(phone, text):
 class AfricasTalkingClient:
     """Sends through Africa's Talking's HTTP API (the same request their SDK makes).
 
-    Why not the SDK: on some Windows laptops and networks, Python's secure connection to
-    api.sandbox.africastalking.com fails with SSL "WRONG_VERSION_NUMBER" while a browser works,
-    because the connection is offered TLS 1.3 and something in the path mishandles it.
-    Here the connection is capped at TLS 1.2, which Africa's Talking supports everywhere.
+    Why not the SDK: `requests` hands urllib3 certifi's CA bundle through the `ca_certs`
+    connection option, and on this network that exact combination fails the TLS handshake
+    with api.sandbox.africastalking.com (SSL "WRONG_VERSION_NUMBER"), even though a browser
+    and a plain socket connect fine. Here the connection verifies against certifi using an
+    SSLContext we build ourselves and never sets `ca_certs`, which avoids the bad handshake.
     """
 
     TIMEOUT = (3.05, 9.05)  # connect, read: seconds
@@ -81,24 +82,28 @@ class AfricasTalkingClient:
             "https://api.sandbox.africastalking.com" if username == "sandbox" else "https://api.africastalking.com"
         ) + "/version1/messaging"
         self.headers = {"Accept": "application/json", "apiKey": api_key}
-        self.session = session or self._tls12_session()
+        self.session = session or self._verified_session()
 
     @staticmethod
-    def _tls12_session():
+    def _verified_session():
         import ssl
 
+        import certifi
         import requests
         from requests.adapters import HTTPAdapter
 
-        class Tls12Adapter(HTTPAdapter):
+        class CertifiAdapter(HTTPAdapter):
             def init_poolmanager(self, *args, **kwargs):
-                context = ssl.create_default_context()
-                context.maximum_version = ssl.TLSVersion.TLSv1_2
-                kwargs["ssl_context"] = context
+                kwargs["ssl_context"] = ssl.create_default_context(cafile=certifi.where())
                 super().init_poolmanager(*args, **kwargs)
 
+            def cert_verify(self, conn, url, verify, cert):
+                # Deliberately empty: letting requests set `ca_certs` on the connection is
+                # what breaks the handshake. The SSLContext above already trusts certifi.
+                pass
+
         session = requests.Session()
-        session.mount("https://", Tls12Adapter())
+        session.mount("https://", CertifiAdapter())
         return session
 
     def send(self, message, recipients, sender_id=None):
