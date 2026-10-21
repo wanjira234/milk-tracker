@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from src import db
-from src.ingestion.manual_entry import SESSIONS, record_feed, record_feed_units, record_yield
+from src.ingestion.manual_entry import BUCKET_LITRES, SESSIONS, record_feed, record_feed_units, record_water, record_yield
 from src.ui import cap, farmer_selector
 from src.auth import require_login
 
@@ -70,6 +70,21 @@ with right:
                 st.error(cap(e))
 
 st.divider()
+st.subheader("Water")
+st.caption("The total the herd drank today. Count 20 L buckets or enter litres. Saving the same day again replaces it.")
+with st.form("water_form"):
+    w1, w2, w3 = st.columns([2, 2, 3], vertical_alignment="bottom")
+    w_date = w1.date_input("Date", value=today, max_value=today, key="w_date")
+    w_amount = w2.number_input("How many", min_value=0.0, step=1.0, format="%.1f", key="w_amount")
+    w_unit = w3.radio("Counted in", [f"{BUCKET_LITRES:g} L buckets", "litres"], horizontal=True, key="w_unit")
+    if st.form_submit_button("Save water", type="primary"):
+        try:
+            saved = record_water(farmer_id, w_date, w_amount, bucket=w_unit != "litres")
+            st.success(f"Saved {saved['litres']:g} L of water on {saved['log_date']}.")
+        except ValueError as e:
+            st.error(cap(e))
+
+st.divider()
 start = today - timedelta(days=13)
 
 st.subheader("Last 14 days")
@@ -89,3 +104,11 @@ if feeds:
     st.dataframe(df.sort_values("Date", ascending=False), hide_index=True, width="stretch")
 else:
     st.caption("No feed recorded in the last 14 days.")
+
+water = db.daily_water(farmer_id, start, today)
+if water:
+    df = pd.DataFrame(water).rename(columns={"log_date": "Date", "litres": "Water (L)"})
+    df["Water (L)"] = df["Water (L)"].astype(float)
+    st.dataframe(df.sort_values("Date", ascending=False), hide_index=True, width="stretch")
+else:
+    st.caption("No water recorded in the last 14 days.")

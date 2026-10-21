@@ -110,3 +110,13 @@ CREATE TABLE IF NOT EXISTS model_snapshots (
     recent_kg     JSONB   NOT NULL,
     UNIQUE (farmer_id, taken_on)
 );
+
+-- ---------------------------------------------------------------------------
+-- Water: total litres the herd drank on a day (one row per farm per day).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS water_logs (
+    farmer_id  INTEGER NOT NULL REFERENCES farmers(id) ON DELETE CASCADE,
+    log_date   DATE    NOT NULL,
+    litres     NUMERIC(8,1) NOT NULL CHECK (litres > 0),
+    PRIMARY KEY (farmer_id, log_date)
+);
