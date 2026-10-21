@@ -168,3 +168,26 @@ CREATE TABLE IF NOT EXISTS dewormings (
     FOREIGN KEY (cow_id, farmer_id) REFERENCES cows (id, farmer_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_deworm_farmer_date ON dewormings (farmer_id, given_on);
+
+-- ---------------------------------------------------------------------------
+-- Life stages and family: calf / heifer / cow, mother links, birth and weaning dates,
+-- and a 'dried_off' breeding event for the dry period.
+-- ---------------------------------------------------------------------------
+ALTER TABLE cows ADD COLUMN IF NOT EXISTS kind TEXT NOT NULL DEFAULT 'cow'
+    CHECK (kind IN ('calf', 'heifer', 'cow'));
+ALTER TABLE cows ADD COLUMN IF NOT EXISTS sex TEXT NOT NULL DEFAULT 'female'
+    CHECK (sex IN ('female', 'male'));
+ALTER TABLE cows ADD COLUMN IF NOT EXISTS dam_id INTEGER;   -- the mother, another cow on the same farm
+ALTER TABLE cows ADD COLUMN IF NOT EXISTS born_on DATE;
+ALTER TABLE cows ADD COLUMN IF NOT EXISTS weaned_on DATE;
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'cows_dam_same_farm') THEN
+        ALTER TABLE cows ADD CONSTRAINT cows_dam_same_farm
+            FOREIGN KEY (dam_id, farmer_id) REFERENCES cows (id, farmer_id);
+    END IF;
+END $$;
+
+ALTER TABLE breeding_events DROP CONSTRAINT IF EXISTS breeding_events_kind_check;
+ALTER TABLE breeding_events ADD CONSTRAINT breeding_events_kind_check
+    CHECK (kind IN ('heat', 'served', 'confirmed_pregnant', 'not_pregnant', 'calved', 'aborted', 'dried_off'));

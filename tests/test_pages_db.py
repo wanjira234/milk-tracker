@@ -119,3 +119,58 @@ def test_the_cows_page_refuses_a_pregnancy_result_with_no_service():
     next(b for b in at.button if b.key == "ev_save").click()
     at.run()
     assert any("service first" in e.value for e in at.error) and db.breeding_events(fid) == []
+
+
+def _all_text(at):
+    return " ".join([m.value for m in at.markdown] + [c.value for c in at.caption])
+
+
+def test_calving_adds_a_calf_with_its_mother_and_weaning_makes_a_heifer():
+    fid = db.add_farmer("Sim", "+254700000001")
+    db.add_cow(fid, "Wanjiku")
+    at = page("pages/5_cows.py")
+    at.selectbox(key="ev_kind").set_value("calved")
+    at.run()
+    at.text_input(key="ev_calf_tag").set_value("Nyota")
+    at.date_input(key="ev_date").set_value(date.today() - timedelta(days=100))
+    next(b for b in at.button if b.key == "ev_save").click()
+    at.run()
+    assert not at.exception
+    text = _all_text(at)
+    assert "Mother: Wanjiku" in text and "Calves: Nyota" in text and "Female calf, still on milk" in text
+    next(b for b in at.button if b.key == "wean_save").click()
+    at.run()
+    assert not at.exception
+    text = _all_text(at)
+    assert "Waiting for first heat" in text and "Mother: Wanjiku" in text  # a heifer now, still linked to her mother
+    assert [h["tag"] for h in db.list_cows(fid) if h["kind"] == "heifer"] == ["Nyota"]
+
+
+def test_the_page_offers_to_update_cows_in_milk_from_the_cow_records():
+    fid = db.add_farmer("Sim", "+254700000001")
+    for tag in ("A", "B", "C"):
+        db.add_cow(fid, tag)
+    db.add_breeding_event(fid, db.list_cows(fid)[0]["id"], date.today(), "dried_off")  # one cow dry: 2 milking
+    db.set_cows_in_milk(fid, date.today() - timedelta(days=5), 3)
+    at = page("pages/5_cows.py")
+    button = next(b for b in at.button if b.key == "sync_milking")
+    assert "2" in button.label
+    button.click()
+    at.run()
+    assert not at.exception and db.cows_in_milk_on(fid, date.today()) == 2
+    assert not [b for b in at.button if b.key == "sync_milking"]  # nothing left to sync
+
+
+def test_adding_a_heifer_and_a_calf_with_a_mother():
+    fid = db.add_farmer("Sim", "+254700000001")
+    mother = db.add_cow(fid, "Wanjiku")
+    at = page("pages/5_cows.py")
+    at.radio(key="add_kind").set_value("calf")
+    at.run()
+    at.text_input(key="new_cow").set_value("Nyota")
+    at.selectbox(key="add_dam").set_value(mother)
+    next(b for b in at.button if b.key == "add_cow").click()
+    at.run()
+    assert not at.exception
+    calf = next(c for c in db.list_cows(fid) if c["tag"] == "Nyota")
+    assert calf["kind"] == "calf" and calf["dam_id"] == mother
