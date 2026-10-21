@@ -138,28 +138,63 @@ def daily_water(farmer_id, start, end):
 
 # --- cows: breeding, semen, deworming ------------------------------------------
 
-def add_cow(farmer_id, tag):
-    """Add a cow (or bring a retired one back). Returns her id."""
+COW_COLUMNS = "id, tag, active, sex, life_stage, birth_date, weaned_on, retired_on, mother_id"
+
+
+def add_cow(farmer_id, tag, sex="female", life_stage="cow", birth_date=None, mother_id=None):
+    """Add a cow (or bring a retired one back). Returns her id.
+
+    A cow already on the farm under this tag keeps her details; only her active flag is reset.
+    """
     return _query(
         """
-        INSERT INTO cows (farmer_id, tag) VALUES (%s, %s)
-        ON CONFLICT (farmer_id, tag) DO UPDATE SET active = TRUE
+        INSERT INTO cows (farmer_id, tag, sex, life_stage, birth_date, mother_id) VALUES (%s, %s, %s, %s, %s, %s)
+        ON CONFLICT (farmer_id, tag) DO UPDATE SET active = TRUE, retired_on = NULL
         RETURNING id
         """,
-        (farmer_id, tag), one=True,
+        (farmer_id, tag, sex, life_stage, birth_date, mother_id), one=True,
     )["id"]
 
 
 def list_cows(farmer_id, active_only=True):
-    sql = "SELECT id, tag, active FROM cows WHERE farmer_id = %s"
+    sql = f"SELECT {COW_COLUMNS} FROM cows WHERE farmer_id = %s"
     if active_only:
         sql += " AND active"
     return _query(sql + " ORDER BY tag", (farmer_id,))
 
 
-def retire_cow(farmer_id, cow_id):
+def retire_cow(farmer_id, cow_id, on=None):
     """Sold or died: hide her from the lists. Her history stays."""
-    _query("UPDATE cows SET active = FALSE WHERE id = %s AND farmer_id = %s", (cow_id, farmer_id))
+    _query(
+        "UPDATE cows SET active = FALSE, retired_on = COALESCE(%s, CURRENT_DATE) WHERE id = %s AND farmer_id = %s",
+        (on, cow_id, farmer_id),
+    )
+
+
+def wean_calf(farmer_id, cow_id, on):
+    """A calf stops drinking milk: a female becomes a heifer, a male a young bull."""
+    _query(
+        """
+        UPDATE cows SET weaned_on = %s,
+               life_stage = CASE WHEN sex = 'female' THEN 'heifer' ELSE 'bull' END
+        WHERE id = %s AND farmer_id = %s AND life_stage = 'calf'
+        """,
+        (on, cow_id, farmer_id),
+    )
+
+
+def make_adult(farmer_id, cow_id):
+    """A heifer who has calved becomes a cow."""
+    _query("UPDATE cows SET life_stage = 'cow' WHERE id = %s AND farmer_id = %s AND life_stage = 'heifer'", (cow_id, farmer_id))
+
+
+def cows_in_milk_from_records(farmer_id):
+    row = _query("SELECT cows_in_milk_from_records AS f FROM farmers WHERE id = %s", (farmer_id,), one=True)
+    return bool(row and row["f"])
+
+
+def set_cows_in_milk_from_records(farmer_id, on):
+    _query("UPDATE farmers SET cows_in_milk_from_records = %s WHERE id = %s", (bool(on), farmer_id))
 
 
 def add_semen(farmer_id, name):
@@ -384,7 +419,11 @@ def set_cows_in_milk(farmer_id, effective_date, cows):
 
 
 def herd_history(farmer_id):
-    """Every cows-in-milk entry, newest first."""
+    """Every cows-in-milk entry, newest first. Worked out from the cow records when the farm chose that."""
+    if cows_in_milk_from_records(farmer_id):
+        from src import herd
+
+        return herd.history(list_cows(farmer_id, active_only=False), breeding_events(farmer_id))
     return _query(
         "SELECT effective_date, cows_in_milk FROM herd_log WHERE farmer_id = %s ORDER BY effective_date DESC",
         (farmer_id,),
@@ -393,6 +432,10 @@ def herd_history(farmer_id):
 
 def cows_in_milk_on(farmer_id, day):
     """Cows in milk on `day`: the latest entry on or before it, or None if there is none yet."""
+    if cows_in_milk_from_records(farmer_id):
+        from src import herd
+
+        return herd.cows_in_milk_on(list_cows(farmer_id, active_only=False), breeding_events(farmer_id), day)
     row = _query(
         """
         SELECT cows_in_milk FROM herd_log

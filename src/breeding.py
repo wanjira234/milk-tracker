@@ -23,10 +23,30 @@ KINDS = {
     "not_pregnant": "Checked: not in calf",
     "calved": "Calved",
     "aborted": "Lost the calf",
+    "dried_off": "Dried off (stopped milking)",
+    "milking": "Is milking (already in milk)",
 }
 
+STAGES = {"calf": "Calf, still on milk", "heifer": "Heifer", "cow": "Cow", "bull": "Young bull"}
 
-def cow_status(events, today):
+
+def age_text(birth_date, today):
+    """'5 months', '1 year 3 months', or None when the birth date is unknown."""
+    if birth_date is None or birth_date > today:
+        return None
+    months = (today.year - birth_date.year) * 12 + today.month - birth_date.month - (today.day < birth_date.day)
+    if months < 1:
+        return "under a month"
+    years, rem = divmod(months, 12)
+    parts = []
+    if years:
+        parts.append(f"{years} year{'s' if years != 1 else ''}")
+    if rem:
+        parts.append(f"{rem} month{'s' if rem != 1 else ''}")
+    return " ".join(parts)
+
+
+def cow_status(events, today, life_stage="cow"):
     """events = [{"event_date", "kind", "semen"}] for ONE cow, any order.
 
     Returns {"state", "label", "next", "due"}:
@@ -53,6 +73,12 @@ def cow_status(events, today):
             calved_on, state, served_on, last_heat = day, "calved", None, None
     fmt = lambda d: d.strftime("%d %b %Y")  # noqa: E731
 
+    if state == "new" and life_stage == "heifer":
+        return {
+            "state": state, "label": "Waiting for first heat",
+            "next": "Record her first heat. Most heifers are first served at about 15 months, once big enough: ask your vet.",
+            "due": None,
+        }
     if state == "new":
         return {"state": state, "label": "No breeding records yet", "next": "Record her next heat or service.", "due": None}
     if state == "open":

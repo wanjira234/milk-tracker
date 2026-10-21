@@ -119,3 +119,29 @@ def test_the_cows_page_refuses_a_pregnancy_result_with_no_service():
     next(b for b in at.button if b.key == "ev_save").click()
     at.run()
     assert any("service first" in e.value for e in at.error) and db.breeding_events(fid) == []
+
+
+def test_calving_adds_a_calf_and_the_farm_can_switch_cows_in_milk_to_the_records():
+    fid = db.add_farmer("Sim", "+254700000001")
+    mum = db.add_cow(fid, "Wanjiku")
+    db.add_breeding_event(fid, mum, date.today() - timedelta(days=300), "milking")
+    at = page("pages/5_cows.py")
+    assert any("Use my cow records" in b.label for b in at.button)
+    next(b for b in at.button if b.key == "herd_on").click()
+    at.run()
+    assert not at.exception and db.cows_in_milk_from_records(fid)
+    at.selectbox(key="ev_kind").set_value("calved")
+    at.run()
+    at.text_input(key="ev_calf_tag").set_value("Pendo")
+    next(b for b in at.button if b.key == "ev_save").click()
+    at.run()
+    assert not at.exception
+    calf = next(c for c in db.list_cows(fid) if c["tag"] == "Pendo")
+    assert calf["mother_id"] == mum and calf["life_stage"] == "calf"
+    text = " ".join(m.value for m in at.markdown) + " ".join(c.value for c in at.caption)
+    assert "Calves on milk" in [h.value for h in at.subheader]
+    assert "Mother: Wanjiku" in text and "Calves: Pendo" in text
+    assert "DeltaGenerator" not in text  # a stray expression would be printed on the page
+    next(b for b in at.button if b.key == f"wean_{calf['id']}").click()
+    at.run()
+    assert not at.exception and next(c for c in db.list_cows(fid) if c["tag"] == "Pendo")["life_stage"] == "heifer"

@@ -127,16 +127,63 @@ def record_water(farmer_id, log_date, amount, bucket=False):
 
 # --- cows: breeding, semen, deworming ------------------------------------------
 
-from src.breeding import KINDS, cow_status  # noqa: E402
+from src.breeding import KINDS, STAGES, cow_status  # noqa: E402
+from src.herd import lactation_on  # noqa: E402
 
 
-def record_cow(farmer_id, tag):
+def record_cow(farmer_id, tag, sex="female", life_stage="cow", birth_date=None, mother_id=None,
+               lactation=None, since=None, today=None):
+    """Add a cow, heifer, calf or bull. Returns {"id", "tag"}.
+
+    lactation ('milking' or 'dry') is for an adult cow being added now: it records that she was
+    already milking, or already dry, from `since`.
+    """
+    today = today or date.today()
     tag = " ".join(str(tag).split())
     if not tag:
         raise ValueError("enter the cow's name or tag number")
     if len(tag) > 40:
         raise ValueError("that name is too long")
-    return {"id": db.add_cow(farmer_id, tag), "tag": tag}
+    if sex not in ("female", "male"):
+        raise ValueError("choose female or male")
+    if life_stage not in STAGES:
+        raise ValueError("choose calf, heifer, cow or bull")
+    if sex == "male" and life_stage in ("heifer", "cow"):
+        raise ValueError("a male is a calf or a bull")
+    if sex == "female" and life_stage == "bull":
+        raise ValueError("a female is a calf, heifer or cow")
+    if birth_date is not None and birth_date > today:
+        raise ValueError("birth date cannot be in the future")
+    if mother_id is not None:
+        mother = next((c for c in db.list_cows(farmer_id, active_only=False) if c["id"] == mother_id), None)
+        if mother is None:
+            raise ValueError("choose the mother from the list")
+        if mother["sex"] != "female":
+            raise ValueError("the mother must be a female")
+    if lactation not in (None, "milking", "dry"):
+        raise ValueError("choose milking or dry")
+    if lactation and life_stage != "cow":
+        raise ValueError("only a cow can be milking or dry")
+    since = since or today
+    if since > today:
+        raise ValueError("date cannot be in the future")
+    cow_id = db.add_cow(farmer_id, tag, sex, life_stage, birth_date, mother_id)
+    if lactation:
+        db.add_breeding_event(farmer_id, cow_id, since, "milking" if lactation == "milking" else "dried_off")
+    return {"id": cow_id, "tag": tag}
+
+
+def record_wean(farmer_id, cow_id, on, today=None):
+    """A calf stops drinking milk."""
+    today = today or date.today()
+    cow = next((c for c in db.list_cows(farmer_id) if c["id"] == cow_id), None)
+    if cow is None or cow["life_stage"] != "calf":
+        raise ValueError("choose a calf from the list")
+    if on > today:
+        raise ValueError("date cannot be in the future")
+    if cow["birth_date"] and on < cow["birth_date"]:
+        raise ValueError("a calf cannot be weaned before it was born")
+    db.wean_calf(farmer_id, cow_id, on)
 
 
 def record_semen(farmer_id, name):
@@ -151,25 +198,48 @@ def record_semen(farmer_id, name):
 def record_breeding_event(farmer_id, cow_id, event_date, kind, semen_id=None, today=None):
     """Validate against the cow's own history, then save.
 
-    A pregnancy result needs a service to refer to, and semen can only go with a service.
+    A pregnancy result needs a service to refer to, semen can only go with a service, only a
+    milking cow can be dried off, and calves and bulls have no breeding or milking events.
     """
     today = today or date.today()
     if kind not in KINDS:
         raise ValueError("choose what happened")
     if event_date > today:
         raise ValueError("date cannot be in the future")
-    if cow_id not in {c["id"] for c in db.list_cows(farmer_id)}:
+    cow = next((c for c in db.list_cows(farmer_id) if c["id"] == cow_id), None)
+    if cow is None:
         raise ValueError("choose a cow from the list")
+    if cow["life_stage"] in ("calf", "bull"):
+        raise ValueError("a calf or bull has no breeding or milking records")
     if kind != "served":
         semen_id = None
     elif semen_id is not None and semen_id not in {s["id"] for s in db.list_semen(farmer_id)}:
         raise ValueError("choose the semen from the list")
+    history = db.breeding_events(farmer_id, cow_id)
     if kind in ("confirmed_pregnant", "not_pregnant"):
-        history = db.breeding_events(farmer_id, cow_id)
         if cow_status(history, event_date)["state"] not in ("served", "in_calf"):
             raise ValueError("record the service first: a pregnancy result needs a service to refer to")
+    if kind == "dried_off" and lactation_on(history, event_date) != "milking":
+        raise ValueError("she is not recorded as milking on that date, so she can't be dried off")
     db.add_breeding_event(farmer_id, cow_id, event_date, kind, semen_id)
+    if kind in ("calved", "milking"):
+        db.make_adult(farmer_id, cow_id)  # a heifer who calves becomes a cow
     return {"cow_id": cow_id, "event_date": event_date, "kind": kind, "semen_id": semen_id}
+
+
+def record_calving(farmer_id, cow_id, event_date, calf_tag=None, calf_sex="female", today=None):
+    """Record a calving and, if a tag is given, add the calf with its mother linked."""
+    today = today or date.today()
+    calf_tag = " ".join(str(calf_tag or "").split())
+    if calf_tag:
+        if calf_sex not in ("female", "male"):
+            raise ValueError("choose whether the calf is female or male")
+        if any(c["tag"] == calf_tag for c in db.list_cows(farmer_id, active_only=False)):
+            raise ValueError(f"there is already an animal called {calf_tag}; use a different name for the calf")
+    saved = record_breeding_event(farmer_id, cow_id, event_date, "calved", today=today)
+    if calf_tag:
+        record_cow(farmer_id, calf_tag, sex=calf_sex, life_stage="calf", birth_date=event_date, mother_id=cow_id, today=today)
+    return saved
 
 
 def record_deworming(farmer_id, given_on, cow_id=None, product=None, today=None):

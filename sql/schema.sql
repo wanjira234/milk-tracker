@@ -168,3 +168,31 @@ CREATE TABLE IF NOT EXISTS dewormings (
     FOREIGN KEY (cow_id, farmer_id) REFERENCES cows (id, farmer_id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_deworm_farmer_date ON dewormings (farmer_id, given_on);
+
+-- ---------------------------------------------------------------------------
+-- Calves, heifers, mothers, and milking/dry status.
+-- ---------------------------------------------------------------------------
+ALTER TABLE cows ADD COLUMN IF NOT EXISTS sex        TEXT NOT NULL DEFAULT 'female' CHECK (sex IN ('female', 'male'));
+ALTER TABLE cows ADD COLUMN IF NOT EXISTS life_stage TEXT NOT NULL DEFAULT 'cow'    CHECK (life_stage IN ('calf', 'heifer', 'cow', 'bull'));
+ALTER TABLE cows ADD COLUMN IF NOT EXISTS birth_date DATE;
+ALTER TABLE cows ADD COLUMN IF NOT EXISTS weaned_on  DATE;       -- when a calf stopped drinking milk
+ALTER TABLE cows ADD COLUMN IF NOT EXISTS retired_on DATE;       -- when she was sold or died
+ALTER TABLE cows ADD COLUMN IF NOT EXISTS mother_id  INTEGER;    -- her mother, if she is on this farm
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'cows_mother_fk') THEN
+        ALTER TABLE cows ADD CONSTRAINT cows_mother_fk
+            FOREIGN KEY (mother_id, farmer_id) REFERENCES cows (id, farmer_id);
+        ALTER TABLE cows ADD CONSTRAINT cows_not_own_mother CHECK (mother_id IS NULL OR mother_id <> id);
+    END IF;
+END $$;
+
+-- Two more things that can happen to a cow: she started milking (already in milk when added)
+-- and she was dried off. 'calved' also starts milking.
+ALTER TABLE breeding_events DROP CONSTRAINT IF EXISTS breeding_events_kind_check;
+ALTER TABLE breeding_events ADD CONSTRAINT breeding_events_kind_check
+    CHECK (kind IN ('heat', 'served', 'confirmed_pregnant', 'not_pregnant', 'calved', 'aborted', 'milking', 'dried_off'));
+
+-- When true, "cows in milk" is worked out from each cow's milking and dried-off dates
+-- instead of being typed in on the farm setup page.
+ALTER TABLE farmers ADD COLUMN IF NOT EXISTS cows_in_milk_from_records BOOLEAN NOT NULL DEFAULT FALSE;
