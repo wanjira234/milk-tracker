@@ -74,6 +74,7 @@ def test_missing_credentials_are_reported(monkeypatch):
 
 # --- the HTTP client (TLS 1.2 cap; no network) --------------------------------------
 
+import shutil  # noqa: E402
 import ssl  # noqa: E402
 
 from src.sms import AfricasTalkingClient  # noqa: E402
@@ -141,3 +142,47 @@ def test_make_client_builds_the_http_client_from_the_environment(monkeypatch):
     monkeypatch.setenv("AT_API_KEY", "k")
     c = sms.make_client()
     assert isinstance(c, AfricasTalkingClient) and "sandbox" in c.url
+
+
+@pytest.mark.skipif(shutil.which("openssl") is None, reason="needs the openssl command to make a test certificate")
+def test_certificates_are_still_verified_over_a_real_connection(tmp_path):
+    """The client overrides requests' certificate handling, so prove it still refuses a certificate
+    that no trusted authority signed (a self-signed one): it must raise, never send."""
+    import json as _json
+    import ssl as _ssl
+    import subprocess as _sp
+    import threading as _th
+    from http.server import BaseHTTPRequestHandler as _H, HTTPServer as _S
+
+    _sp.run(
+        ["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-keyout", str(tmp_path / "k.pem"), "-out", str(tmp_path / "c.pem"),
+         "-days", "2", "-subj", "/CN=localhost", "-addext", "subjectAltName=DNS:localhost"],
+        check=True, capture_output=True,
+    )
+    hits = []
+
+    class Handler(_H):
+        def do_POST(self):
+            hits.append(1)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(_json.dumps(OK_REPLY).encode())
+
+        def log_message(self, *a):
+            pass
+
+    server = _S(("127.0.0.1", 0), Handler)
+    ctx = _ssl.SSLContext(_ssl.PROTOCOL_TLS_SERVER)
+    ctx.load_cert_chain(tmp_path / "c.pem", tmp_path / "k.pem")
+    server.socket = ctx.wrap_socket(server.socket, server_side=True)
+    _th.Thread(target=server.serve_forever, daemon=True).start()
+    try:
+        client = AfricasTalkingClient("sandbox", "K")
+        client.url = f"https://localhost:{server.server_address[1]}/version1/messaging"
+        with pytest.raises(Exception, match="CERTIFICATE_VERIFY_FAILED"):
+            client.send("hello", ["+254700000001"])
+        assert hits == []  # the request was never sent to the untrusted server
+        assert send_sms("+254700000001", "hello", client=client)["ok"] is False
+    finally:
+        server.shutdown()

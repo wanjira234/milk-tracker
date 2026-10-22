@@ -17,7 +17,7 @@ from src.sms import SmsError, make_client, send_sms
 load_dotenv()
 
 
-def main(argv):
+def check(argv):
     if len(argv) != 2:
         return "usage: python -m src.sms_check +2547XXXXXXXX"
     username = os.environ.get("AT_USERNAME", "")
@@ -30,6 +30,13 @@ def main(argv):
     if result["ok"]:
         return "Accepted by Africa's Talking." + (" Check the simulator." if username == "sandbox" else "")
     return "Africa's Talking did not accept it. Read 'status' and 'detail' above."
+
+
+def main(argv):
+    """Print the verdict and return the exit code: 0 only when Africa's Talking accepted the message."""
+    verdict = check(argv)
+    print(verdict)
+    return 0 if verdict.startswith("Accepted") else 1
 
 
 if __name__ == "__main__":
