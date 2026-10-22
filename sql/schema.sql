@@ -236,3 +236,23 @@ CREATE TABLE IF NOT EXISTS login_codes (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_login_codes_user ON login_codes (user_id, created_at);
+
+-- Self-signup waits for an admin's approval (a pending login cannot log in and has no farm yet).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pending   BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS farm_name TEXT;
+
+DO $$
+DECLARE c text;
+BEGIN
+    FOR c IN SELECT conname FROM pg_constraint
+             WHERE conrelid = 'users'::regclass AND contype = 'c'
+               AND pg_get_constraintdef(oid) LIKE '%farmer_id IS NOT NULL%'
+               AND conname <> 'users_farmer_has_farm'
+    LOOP
+        EXECUTE format('ALTER TABLE users DROP CONSTRAINT %I', c);
+    END LOOP;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_farmer_has_farm') THEN
+        ALTER TABLE users ADD CONSTRAINT users_farmer_has_farm
+            CHECK (role <> 'farmer' OR farmer_id IS NOT NULL OR pending);
+    END IF;
+END $$;

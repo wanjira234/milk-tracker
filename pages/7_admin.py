@@ -27,6 +27,20 @@ routes = db.list_routes()
 vets = db.list_users("vet")
 farmers = db.list_farmers()
 
+pending = db.list_pending_users()
+st.header(f"Signups waiting ({len(pending)})")
+if not pending:
+    st.caption("Nobody is waiting.")
+for u in pending:
+    c1, c2, c3 = st.columns([4, 1, 1])
+    c1.write(f"**{u['name']}** · {u['role']} · {u['phone'] or ''} {u['email'] or ''}" + (f" · {u['farm_name']}" if u["farm_name"] else ""))
+    if c2.button("Approve", key=f"approve_{u['id']}"):
+        if attempt(lambda uid=u["id"]: accounts.approve_signup(uid), f"Approved {u['name']}."):
+            st.rerun()
+    if c3.button("Reject", key=f"reject_{u['id']}"):
+        accounts.reject_signup(u["id"])
+        st.rerun()
+
 st.header("Routes")
 if routes:
     st.dataframe(
