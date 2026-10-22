@@ -191,3 +191,48 @@ END $$;
 ALTER TABLE breeding_events DROP CONSTRAINT IF EXISTS breeding_events_kind_check;
 ALTER TABLE breeding_events ADD CONSTRAINT breeding_events_kind_check
     CHECK (kind IN ('heat', 'served', 'confirmed_pregnant', 'not_pregnant', 'calved', 'aborted', 'dried_off'));
+
+-- ---------------------------------------------------------------------------
+-- Accounts, roles and routes.
+--   role 'farmer' is linked to one farm; 'vet' and 'admin' are not.
+--   A route (for example 4A) has one allocated vet; a farm belongs to one route.
+--   Login is by SMS code (phone) or by email + password. Passwords are stored only as
+--   scrypt hashes; SMS codes only as keyed hashes, and they expire.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS users (
+    id                   SERIAL PRIMARY KEY,
+    role                 TEXT    NOT NULL CHECK (role IN ('admin', 'vet', 'farmer')),
+    name                 TEXT    NOT NULL,
+    phone                TEXT    UNIQUE,
+    email                TEXT    UNIQUE,
+    password_hash        TEXT,
+    farmer_id            INTEGER UNIQUE REFERENCES farmers(id) ON DELETE CASCADE,
+    must_change_password BOOLEAN NOT NULL DEFAULT FALSE,
+    active               BOOLEAN NOT NULL DEFAULT TRUE,
+    failed_logins        INTEGER NOT NULL DEFAULT 0,   -- consecutive wrong passwords
+    locked_until         TIMESTAMPTZ,                  -- set after too many
+    created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (phone IS NOT NULL OR email IS NOT NULL),
+    CHECK (role <> 'farmer' OR farmer_id IS NOT NULL)
+);
+
+CREATE TABLE IF NOT EXISTS routes (
+    id          SERIAL PRIMARY KEY,
+    code        TEXT NOT NULL UNIQUE,          -- e.g. 4A
+    name        TEXT,
+    vet_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL
+);
+
+ALTER TABLE farmers ADD COLUMN IF NOT EXISTS route_id INTEGER REFERENCES routes(id) ON DELETE SET NULL;
+
+CREATE TABLE IF NOT EXISTS login_codes (
+    id         SERIAL PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    salt       TEXT    NOT NULL,
+    code_hash  TEXT    NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    used       BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_login_codes_user ON login_codes (user_id, created_at);

@@ -3,18 +3,19 @@ from datetime import date, timedelta
 
 import streamlit as st
 
-from src import db
+from src import accounts, db
 from src.ingestion.manual_entry import normalize_phone
 from src.ui import cap, farmer_selector
 from src.auth import require_login
 
 st.set_page_config(page_title="Milk Tracker", page_icon="🥛", layout="centered")
-require_login()
+user = require_login()
 
 st.title("Milk Tracker")
 st.caption("Yield and feed tracking for smallholder dairy farms.")
 
-with st.expander("Add a farmer", expanded=not db.list_farmers()):
+
+def add_farmer_form():
     with st.form("add_farmer", clear_on_submit=True):
         name = st.text_input("Name")
         phone = st.text_input("Phone", placeholder="0712 345 678")
@@ -35,7 +36,12 @@ with st.expander("Add a farmer", expanded=not db.list_farmers()):
             except ValueError as e:
                 st.error(cap(e))
 
-farmers = db.list_farmers()
+farmers = accounts.visible_farmers(user)
+if user["role"] == "admin":
+    with st.expander("Add a farmer", expanded=not farmers):
+        add_farmer_form()
+elif not farmers:
+    st.info("No farm is linked to your login yet. Ask your admin.")
 if farmers:
     farmer_id = farmer_selector()
     today = date.today()

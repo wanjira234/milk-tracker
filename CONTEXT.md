@@ -69,7 +69,9 @@ src/profit.py               Profit = milk income minus feed cost, complete days 
 src/water.py                Water summary (litres per day, per cow in milk)
 src/breeding.py             Where each cow is in her cycle (heat, served, in calf, calved) and deworming due dates; typical-figure estimates
 src/herd.py                 Cards for calf / heifer / cow with family lines; milking vs dry count
-src/auth.py                 Password screen; every page calls require_login() right after set_page_config (APP_PASSWORD in .env or Streamlit secrets; unset = locked)
+src/auth.py                 Login screen (SMS code, email+password, or owner APP_PASSWORD = admin); require_login(roles=None) returns the user; every page calls require_login() right after set_page_config (APP_PASSWORD / ADMIN_PHONE in .env or Streamlit secrets; both unset = locked)
+src/accounts.py             Users, roles (admin/vet/farmer), routes, SMS codes, lockout, visible_farmers(user)
+pages/6_account.py, 7_admin.py  My login; admin: routes, vets, farm-to-route, create logins
 src/loader.py               Loads one farmer's data, runs the model and rules; `python -m src.loader FARMER_ID` prints the result
 src/messages.py             Decision -> SMS facts, plain template (en; sw is a DRAFT), and the check that rejects a reworded SMS
 src/llm.py                  Claude (Haiku) rewords the template; falls back to the template on any problem

@@ -1,11 +1,18 @@
-"""A password screen in front of every page.
+"""Login in front of every page, and who the logged-in person is.
 
-The password is APP_PASSWORD, read from the environment (.env on a laptop) or from
-Streamlit's secrets (when hosted). It is never in the code. With no password set the app
-stays LOCKED rather than open, so forgetting the setting can't expose farmers' records.
+Three ways in, all ending in `st.session_state["user"]`:
+  - SMS code (farmers, vets and admin with a phone number on file),
+  - email + password,
+  - the shared owner password APP_PASSWORD, which acts as admin. It keeps the app usable before any
+    account exists and lets the owner create the first ones.
+Roles: admin sees everything, a vet sees the farms on their routes, a farmer sees their own farm.
 
-Every page calls `require_login()` straight after `st.set_page_config`, because a visitor
-can open any page's address directly and skip the home page.
+With neither APP_PASSWORD nor ADMIN_PHONE set the app stays LOCKED rather than open, so a
+forgotten setting can't expose farmers' records. A login screen never touches the database
+until someone actually submits it.
+
+Every page calls `require_login()` straight after `st.set_page_config`, because a visitor can
+open any page's address directly and skip the home page.
 """
 import hmac
 import os
@@ -15,9 +22,11 @@ import streamlit as st
 
 MAX_WRONG = 5  # wrong guesses allowed per browser session before it locks until reload
 
+OWNER_USER = {"id": None, "role": "admin", "name": "Owner", "farmer_id": None, "must_change_password": False}
+
 
 def configured_password():
-    """The password, from APP_PASSWORD in the environment or in Streamlit secrets; '' if unset."""
+    """The owner password, from APP_PASSWORD in the environment or in Streamlit secrets; '' if unset."""
     value = os.environ.get("APP_PASSWORD", "")
     if not value:
         try:
@@ -27,6 +36,17 @@ def configured_password():
     return value
 
 
+def configure_admin_phone():
+    """Make ADMIN_PHONE from Streamlit secrets visible to src.accounts, which reads the environment."""
+    if not os.environ.get("ADMIN_PHONE"):
+        try:
+            value = str(st.secrets.get("ADMIN_PHONE", ""))
+        except Exception:
+            value = ""
+        if value:
+            os.environ["ADMIN_PHONE"] = value
+
+
 def password_ok(entered, expected):
     """True only for a non-empty expected password that matches exactly (constant-time compare)."""
     if not expected or not entered:
@@ -34,30 +54,135 @@ def password_ok(entered, expected):
     return hmac.compare_digest(entered.encode(), expected.encode())
 
 
-def require_login():
-    """Show the password screen and stop the page until the right password is entered."""
-    expected = configured_password()
-    if not expected:
-        st.error("This app is locked: no password has been set. Set APP_PASSWORD (see README).")
-        st.stop()
-    if st.session_state.get("logged_in"):
-        if st.sidebar.button("Log out"):
-            st.session_state.clear()
-            st.rerun()
-        return
-    st.title("Milk Tracker")
-    wrong = st.session_state.get("wrong_guesses", 0)
-    if wrong >= MAX_WRONG:
-        st.error("Too many wrong tries. Reload the page to try again.")
-        st.stop()
-    with st.form("login"):
-        entered = st.text_input("Password", type="password")
+def current_user():
+    return st.session_state.get("user")
+
+
+def _sms_sender(phone, text):
+    from src import sms
+
+    try:
+        return bool(sms.send_sms(phone, text)["ok"])
+    except Exception:  # a refused or failed SMS is reported to the person, never a traceback
+        return False
+
+
+def _too_many():
+    return st.session_state.get("wrong_guesses", 0) >= MAX_WRONG
+
+
+def _wrong():
+    st.session_state["wrong_guesses"] = st.session_state.get("wrong_guesses", 0) + 1
+    time.sleep(1)  # slows guessing
+
+
+def _log_in(user):
+    st.session_state["user"] = user
+    st.session_state["wrong_guesses"] = 0
+    st.session_state.pop("code_sent_to", None)
+    st.rerun()
+
+
+def _tab_sms():
+    from src import accounts
+
+    st.caption("We text a 6-digit code to your phone.")
+    with st.form("sms_login"):
+        phone = st.text_input("Phone number", placeholder="0712 345 678", key="sms_phone")
+        entered = st.text_input("Code (after you get it)", key="sms_code", max_chars=8)
+        c1, c2 = st.columns(2)
+        ask = c1.form_submit_button("Send me a code")
+        go = c2.form_submit_button("Log in", type="primary")
+    if ask:
+        try:
+            r = accounts.request_code(phone, _sms_sender)
+        except ValueError as e:
+            st.error(str(e)[:1].upper() + str(e)[1:] + ".")
+        else:
+            (st.success if r["status"] == "sent" else st.error)(r["message"])
+    if go:
+        user = accounts.verify_code(phone, entered)
+        if user:
+            _log_in(accounts.session_user(user))
+        _wrong()
+        st.error("That code didn't work. It may have expired: ask for a new one.")
+
+
+def _tab_email():
+    from src import accounts
+
+    with st.form("email_login"):
+        email = st.text_input("Email", key="login_email")
+        password = st.text_input("Password", type="password", key="login_password")
+        go = st.form_submit_button("Log in", type="primary")
+    if go:
+        user = accounts.login_password(email, password)
+        if user:
+            _log_in(accounts.session_user(user))
+        _wrong()
+        st.error(accounts.locked_message(email) or "Wrong email or password.")
+
+
+def _tab_owner(expected):
+    with st.form("owner_login"):
+        entered = st.text_input("Owner password", type="password", key="owner_password")
         if st.form_submit_button("Log in", type="primary"):
             if password_ok(entered, expected):
-                st.session_state["logged_in"] = True
-                st.session_state["wrong_guesses"] = 0
-                st.rerun()
-            st.session_state["wrong_guesses"] = wrong + 1
-            time.sleep(1)  # slows guessing
+                _log_in(dict(OWNER_USER))
+            _wrong()
             st.error("Wrong password.")
+
+
+def _force_password_change(user):
+    from src import accounts
+
+    st.title("Choose your own password")
+    st.write("You are using a temporary password. Choose one only you know.")
+    with st.form("change_password"):
+        email = st.text_input("Your email (you will log in with this)", key="cp_email")
+        new = st.text_input("New password (at least 8 characters)", type="password", key="cp_new")
+        again = st.text_input("New password again", type="password", key="cp_again")
+        if st.form_submit_button("Save password", type="primary"):
+            try:
+                if new != again:
+                    raise ValueError("the two passwords are not the same")
+                accounts.set_password(user["id"], new, email=email or None)
+            except ValueError as e:
+                st.error(str(e)[:1].upper() + str(e)[1:] + ".")
+            else:
+                st.session_state["user"] = {**user, "must_change_password": False}
+                st.rerun()
     st.stop()
+
+
+def require_login(roles=None):
+    """Show the login screen and stop the page until someone is logged in; returns the user.
+
+    `roles`: if given, only these roles may see the page (others are told so and stopped).
+    """
+    configure_admin_phone()
+    owner_pw = configured_password()
+    if not owner_pw and not os.environ.get("ADMIN_PHONE") and not st.session_state.get("user"):
+        st.error("This app is locked: no password has been set. Set APP_PASSWORD (see README).")
+        st.stop()
+    user = current_user()
+    if not user:
+        st.title("Milk Tracker")
+        if _too_many():
+            st.error("Too many wrong tries. Reload the page to try again.")
+            st.stop()
+        names = ["SMS code", "Email & password"] + (["Owner password"] if owner_pw else [])
+        for tab, name in zip(st.tabs(names), names):
+            with tab:
+                {"SMS code": _tab_sms, "Email & password": _tab_email}.get(name, lambda: _tab_owner(owner_pw))()
+        st.stop()
+    if user.get("must_change_password"):
+        _force_password_change(user)
+    st.sidebar.caption(f"Signed in: {user['name']} ({user['role']})")
+    if st.sidebar.button("Log out"):
+        st.session_state.clear()
+        st.rerun()
+    if roles and user["role"] not in roles:
+        st.error("This page is not available for your account.")
+        st.stop()
+    return user

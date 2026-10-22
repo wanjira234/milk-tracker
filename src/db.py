@@ -238,6 +238,128 @@ def dewormings(farmer_id):
     )
 
 
+# --- accounts, routes, login codes -----------------------------------------------
+
+USER_COLUMNS = "id, role, name, phone, email, farmer_id, must_change_password, active, failed_logins, locked_until"
+
+
+def create_user(role, name, phone=None, email=None, password_hash=None, farmer_id=None, must_change_password=False):
+    return _query(
+        """
+        INSERT INTO users (role, name, phone, email, password_hash, farmer_id, must_change_password)
+        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+        """,
+        (role, name, phone, email, password_hash, farmer_id, must_change_password), one=True,
+    )["id"]
+
+
+def get_user(user_id):
+    return _query(f"SELECT {USER_COLUMNS} FROM users WHERE id = %s", (user_id,), one=True)
+
+
+def user_by_phone(phone):
+    return _query(f"SELECT {USER_COLUMNS} FROM users WHERE phone = %s", (phone,), one=True)
+
+
+def user_by_email(email):
+    """Includes password_hash, for checking a login. Never show it."""
+    return _query(f"SELECT {USER_COLUMNS}, password_hash FROM users WHERE email = %s", (email,), one=True)
+
+
+def list_users(role=None):
+    sql = f"SELECT {USER_COLUMNS} FROM users"
+    args = ()
+    if role:
+        sql += " WHERE role = %s"
+        args = (role,)
+    return _query(sql + " ORDER BY role, name", args)
+
+
+def update_user(user_id, **fields):
+    allowed = {"name", "phone", "email", "password_hash", "must_change_password", "active", "failed_logins", "locked_until"}
+    bad = set(fields) - allowed
+    if bad:
+        raise ValueError(f"cannot update {sorted(bad)}")
+    if not fields:
+        return
+    sets = ", ".join(f"{k} = %s" for k in fields)
+    _query(f"UPDATE users SET {sets} WHERE id = %s", (*fields.values(), user_id))
+
+
+def farmer_by_phone(phone):
+    return _query("SELECT * FROM farmers WHERE phone = %s", (phone,), one=True)
+
+
+def get_farmer(farmer_id):
+    return _query("SELECT * FROM farmers WHERE id = %s", (farmer_id,), one=True)
+
+
+def add_route(code, name=None):
+    return _query(
+        """
+        INSERT INTO routes (code, name) VALUES (%s, %s)
+        ON CONFLICT (code) DO UPDATE SET name = COALESCE(EXCLUDED.name, routes.name)
+        RETURNING id
+        """,
+        (code, name), one=True,
+    )["id"]
+
+
+def list_routes():
+    return _query(
+        """
+        SELECT r.id, r.code, r.name, r.vet_user_id, u.name AS vet_name,
+               (SELECT COUNT(*) FROM farmers f WHERE f.route_id = r.id) AS farms
+        FROM routes r LEFT JOIN users u ON u.id = r.vet_user_id ORDER BY r.code
+        """
+    )
+
+
+def set_route_vet(route_id, vet_user_id):
+    _query("UPDATE routes SET vet_user_id = %s WHERE id = %s", (vet_user_id, route_id))
+
+
+def set_farmer_route(farmer_id, route_id):
+    _query("UPDATE farmers SET route_id = %s WHERE id = %s", (route_id, farmer_id))
+
+
+def farmers_on_vet_routes(vet_user_id):
+    return _query(
+        "SELECT f.* FROM farmers f JOIN routes r ON r.id = f.route_id WHERE r.vet_user_id = %s AND f.active ORDER BY f.id",
+        (vet_user_id,),
+    )
+
+
+def add_login_code(user_id, salt, code_hash, expires_at, created_at):
+    """created_at comes from the app's clock (not the database's) so throttling and expiry agree."""
+    _query(
+        "INSERT INTO login_codes (user_id, salt, code_hash, expires_at, created_at) VALUES (%s, %s, %s, %s, %s)",
+        (user_id, salt, code_hash, expires_at, created_at),
+    )
+
+
+def recent_login_code_times(user_id, since):
+    return [r["created_at"] for r in _query(
+        "SELECT created_at FROM login_codes WHERE user_id = %s AND created_at > %s", (user_id, since)
+    )]
+
+
+def latest_login_code(user_id):
+    return _query(
+        "SELECT id, salt, code_hash, expires_at, attempts, used FROM login_codes WHERE user_id = %s "
+        "ORDER BY created_at DESC, id DESC LIMIT 1",
+        (user_id,), one=True,
+    )
+
+
+def bump_login_attempts(code_id):
+    _query("UPDATE login_codes SET attempts = attempts + 1 WHERE id = %s", (code_id,))
+
+
+def use_login_code(code_id):
+    _query("UPDATE login_codes SET used = TRUE WHERE id = %s", (code_id,))
+
+
 # --- budget ------------------------------------------------------------------
 
 def month_start(d: date) -> date:

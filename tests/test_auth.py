@@ -34,32 +34,73 @@ def test_with_no_password_set_every_page_stays_locked(page):
     assert not at.text_input  # nothing to type into, and no data shown
 
 
+def key(at, kind, k):
+    return next(w for w in getattr(at, kind) if w.key == k)
+
+
+@pytest.fixture(autouse=True)
+def no_admin_phone(monkeypatch):
+    monkeypatch.delenv("ADMIN_PHONE", raising=False)
+
+
 @pytest.mark.parametrize("page", PAGES)
-def test_every_page_asks_for_the_password_and_never_touches_the_database(monkeypatch, page):
+def test_every_page_offers_the_three_logins_and_never_touches_the_database(monkeypatch, page):
     monkeypatch.setenv("APP_PASSWORD", "open-sesame")
     at = run(page)
     assert not at.exception  # a database call would have raised
-    assert at.text_input[0].label == "Password"
+    assert [t.label for t in at.tabs] == ["SMS code", "Email & password", "Owner password"]
+    assert key(at, "text_input", "owner_password")
 
 
-def test_wrong_password_is_refused_and_locks_after_too_many_tries(monkeypatch):
+@pytest.mark.parametrize("page", PAGES)
+def test_a_page_opened_directly_shows_nothing_without_login(monkeypatch, page):
+    monkeypatch.setenv("APP_PASSWORD", "open-sesame")
+    at = run(page)
+    assert not at.metric and not at.dataframe and "user" not in at.session_state
+
+
+def test_wrong_owner_password_is_refused_and_locks_after_too_many_tries(monkeypatch):
     monkeypatch.setenv("APP_PASSWORD", "open-sesame")
     monkeypatch.setattr("time.sleep", lambda s: None)
     at = run("app.py")
     for _ in range(MAX_WRONG):
-        at.text_input[0].set_value("nope")
-        at.button[0].click().run()
-        assert not at.session_state["logged_in"] if "logged_in" in at.session_state else True  # never let in
+        key(at, "text_input", "owner_password").set_value("nope")
+        at.button[-1].click().run()
+        assert "user" not in at.session_state
     at = at.run()
     assert "Too many" in at.error[0].value and not at.text_input
 
 
-def test_right_password_logs_in(monkeypatch):
+def test_right_owner_password_logs_in_as_admin(monkeypatch):
     monkeypatch.setenv("APP_PASSWORD", "open-sesame")
     monkeypatch.setattr("src.db.list_farmers", lambda *a, **k: [])  # stand-in for the database
     at = run("app.py")
-    at.text_input[0].set_value("open-sesame")
-    at.button[0].click().run()
-    assert not at.exception and not [t for t in at.text_input if t.label == "Password"]
+    key(at, "text_input", "owner_password").set_value("open-sesame")
+    at.button[-1].click().run()
+    assert not at.exception and at.session_state["user"]["role"] == "admin"
     assert at.expander[0].label == "Add a farmer"  # the real home page is showing
     assert any(b.label == "Log out" for b in at.sidebar.button)
+
+
+def test_a_farmer_cannot_open_the_admin_page_or_add_farmers(monkeypatch):
+    monkeypatch.setenv("APP_PASSWORD", "x")
+    monkeypatch.setattr("src.accounts.visible_farmers", lambda u: [])
+    farmer = {"id": 5, "role": "farmer", "name": "F", "farmer_id": 9, "must_change_password": False}
+    at = AppTest.from_file(os.path.join(ROOT, "pages/7_admin.py"), default_timeout=20)
+    at.session_state["user"] = farmer
+    at.run()
+    assert at.error and "not available" in at.error[0].value
+    at = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=20)
+    at.session_state["user"] = farmer
+    at.run()
+    assert not at.exception and not at.expander  # no "Add a farmer"
+    assert at.info and "No farm is linked" in at.info[0].value
+
+
+def test_a_temporary_password_must_be_changed_before_anything_else(monkeypatch):
+    monkeypatch.setenv("APP_PASSWORD", "x")
+    at = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=20)
+    at.session_state["user"] = {"id": 5, "role": "farmer", "name": "F", "farmer_id": 9, "must_change_password": True}
+    at.run()
+    assert not at.exception and at.title[0].value == "Choose your own password"
+    assert not at.metric

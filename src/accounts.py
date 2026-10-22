@@ -1,0 +1,234 @@
+"""Who is logging in, and what they may see. Logic only: no Streamlit.
+
+Login is one of two ways, the person's choice:
+  - a one-time code sent by SMS to their phone, or
+  - email + password.
+Roles: farmer (one farm), vet (the farms on the routes they are allocated), admin (everything).
+
+Hard rules in here: wrong-password lockout is stored in the database (so reloading the page
+does not reset it), a code is single-use and expires, and a failed login never says whether the
+email exists.
+"""
+import os
+import re
+from datetime import datetime, timedelta, timezone
+
+import psycopg2
+
+from src import db, logincode
+from src.ingestion.manual_entry import normalize_phone
+from src.passwords import DUMMY_HASH, check_strength, hash_password, verify_password
+
+ROLES = ("admin", "vet", "farmer")
+MAX_FAILED_LOGINS = 5
+LOCKOUT = timedelta(minutes=15)
+_EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _now():
+    return datetime.now(timezone.utc)
+
+
+def normalize_email(raw):
+    email = str(raw or "").strip().lower()
+    if not _EMAIL.match(email) or len(email) > 120:
+        raise ValueError("enter a valid email address")
+    return email
+
+
+def admin_phone():
+    """The owner's phone, from ADMIN_PHONE: the first login by this number becomes the admin account."""
+    raw = os.environ.get("ADMIN_PHONE", "").strip()
+    try:
+        return normalize_phone(raw) if raw else None
+    except ValueError:
+        return None
+
+
+def session_user(row):
+    """What the app remembers about a logged-in person (never the password hash)."""
+    return {
+        "id": row["id"], "role": row["role"], "name": row["name"],
+        "farmer_id": row["farmer_id"], "must_change_password": bool(row["must_change_password"]),
+    }
+
+
+# --- SMS code login ---------------------------------------------------------------
+
+
+def user_for_phone(phone, owner_phone=None):
+    """The account for a phone number. First use creates it when the number belongs to a registered
+    farmer (farmer account) or is the owner's ADMIN_PHONE (admin account). Otherwise None."""
+    user = db.user_by_phone(phone)
+    if user:
+        return user if user["active"] else None
+    farmer = db.farmer_by_phone(phone)
+    if farmer and farmer["active"]:
+        uid = db.create_user("farmer", farmer["name"], phone=phone, farmer_id=farmer["id"])
+        return db.get_user(uid)
+    if owner_phone and phone == owner_phone:
+        return db.get_user(db.create_user("admin", "Admin", phone=phone))
+    return None
+
+
+def request_code(raw_phone, send, now=None, owner_phone=None):
+    """Make and send a login code. `send(phone, text)` returns True when the SMS was accepted.
+
+    Returns {"status": "sent" | "unknown" | "throttled" | "failed", "message": plain words}.
+    """
+    now = now or _now()
+    phone = normalize_phone(raw_phone)  # ValueError says what is wrong with the number
+    user = user_for_phone(phone, owner_phone if owner_phone is not None else admin_phone())
+    if user is None:
+        return {"status": "unknown", "message": "This number is not registered. Ask your admin to add you."}
+    recent = db.recent_login_code_times(user["id"], now - timedelta(hours=1))
+    ok, why = logincode.may_send(recent, now)
+    if not ok:
+        return {"status": "throttled", "message": why[:1].upper() + why[1:] + "."}
+    code, salt = logincode.new_code(), logincode.new_salt()
+    db.add_login_code(user["id"], salt, logincode.hash_code(code, salt), now + logincode.CODE_TTL, now)
+    if not send(phone, logincode.message(code)):
+        return {"status": "failed", "message": "The SMS could not be sent. Try again, or log in with your email and password."}
+    return {"status": "sent", "message": f"A 6-digit code was sent to {phone}. It works for 10 minutes."}
+
+
+def verify_code(raw_phone, entered, now=None):
+    """The user row when `entered` is the latest valid code for this phone, else None. Single use."""
+    now = now or _now()
+    try:
+        phone = normalize_phone(raw_phone)
+    except ValueError:
+        return None
+    user = db.user_by_phone(phone)
+    if not user or not user["active"]:
+        return None
+    row = db.latest_login_code(user["id"])
+    if not row or not logincode.usable(row, now):
+        return None
+    if not logincode.matches(entered, row["salt"], row["code_hash"]):
+        db.bump_login_attempts(row["id"])
+        return None
+    db.use_login_code(row["id"])
+    return user
+
+
+# --- email + password login --------------------------------------------------------
+
+
+def login_password(raw_email, password, now=None):
+    """The user row for a correct email + password, else None. Locks the account after repeated failures."""
+    now = now or _now()
+    try:
+        email = normalize_email(raw_email)
+    except ValueError:
+        verify_password(password or "", DUMMY_HASH)
+        return None
+    user = db.user_by_email(email)
+    if not user or not user["active"] or not user.get("password_hash"):
+        verify_password(password or "", DUMMY_HASH)  # same time as a real check
+        return None
+    if user["locked_until"] and now < user["locked_until"]:
+        return None
+    if verify_password(password or "", user["password_hash"]):
+        if user["failed_logins"] or user["locked_until"]:
+            db.update_user(user["id"], failed_logins=0, locked_until=None)
+        return {k: v for k, v in user.items() if k != "password_hash"}
+    failed = user["failed_logins"] + 1
+    db.update_user(user["id"], failed_logins=failed, locked_until=now + LOCKOUT if failed >= MAX_FAILED_LOGINS else None)
+    return None
+
+
+def locked_message(raw_email, now=None):
+    """'Too many tries' text when the account is locked, so the person is told why; else None."""
+    now = now or _now()
+    try:
+        user = db.user_by_email(normalize_email(raw_email))
+    except ValueError:
+        return None
+    if user and user["locked_until"] and now < user["locked_until"]:
+        minutes = int((user["locked_until"] - now).total_seconds() // 60) + 1
+        return f"Too many wrong tries. Try again in about {minutes} minute(s), or log in with an SMS code."
+    return None
+
+
+def set_password(user_id, new_password, email=None):
+    """Set (or change) a password, and optionally the email to use with it."""
+    check_strength(new_password)
+    fields = {"password_hash": hash_password(new_password), "must_change_password": False, "failed_logins": 0, "locked_until": None}
+    if email:
+        fields["email"] = normalize_email(email)
+    try:
+        db.update_user(user_id, **fields)
+    except psycopg2.errors.UniqueViolation:
+        raise ValueError("that email is already used by another account") from None
+
+
+# --- creating accounts (admin) ----------------------------------------------------
+
+
+def create_account(role, name, phone=None, email=None, temp_password=None, farmer_id=None):
+    """Create a login. With a temporary password, the person must change it at first login."""
+    if role not in ROLES:
+        raise ValueError("choose a role")
+    name = " ".join(str(name or "").split())
+    if not name:
+        raise ValueError("enter a name")
+    phone = normalize_phone(phone) if phone else None
+    email = normalize_email(email) if email else None
+    if not phone and not email:
+        raise ValueError("enter a phone number or an email")
+    if temp_password:
+        if not email:
+            raise ValueError("a password login needs an email")
+        check_strength(temp_password)
+    if role == "farmer":
+        if farmer_id is None or db.get_farmer(farmer_id) is None:
+            raise ValueError("choose the farm this farmer belongs to")
+    else:
+        farmer_id = None
+    try:
+        uid = db.create_user(
+            role, name, phone, email,
+            hash_password(temp_password) if temp_password else None, farmer_id, must_change_password=bool(temp_password),
+        )
+    except psycopg2.errors.UniqueViolation:
+        raise ValueError("that phone number, email or farm already has a login") from None
+    return uid
+
+
+# --- routes -------------------------------------------------------------------------
+
+
+def record_route(code, name=None):
+    code = str(code or "").strip().upper()
+    if not re.fullmatch(r"[A-Z0-9-]{1,10}", code):
+        raise ValueError("a route code is letters and numbers, like 4A")
+    return db.add_route(code, " ".join(str(name or "").split()) or None)
+
+
+def allocate_vet(route_id, vet_user_id):
+    """Allocate a vet to a route (or None to clear it)."""
+    if vet_user_id is not None:
+        vet = db.get_user(vet_user_id)
+        if not vet or vet["role"] != "vet" or not vet["active"]:
+            raise ValueError("choose a vet")
+    db.set_route_vet(route_id, vet_user_id)
+
+
+def assign_route(farmer_id, route_id):
+    if route_id is not None and route_id not in {r["id"] for r in db.list_routes()}:
+        raise ValueError("choose a route from the list")
+    db.set_farmer_route(farmer_id, route_id)
+
+
+# --- what each role may see ---------------------------------------------------------
+
+
+def visible_farmers(user):
+    """The farms this person may open: a farmer sees their own, a vet the farms on their routes, an admin all."""
+    if user["role"] == "admin":
+        return db.list_farmers()
+    if user["role"] == "vet":
+        return db.farmers_on_vet_routes(user["id"])
+    farm = db.get_farmer(user["farmer_id"]) if user["farmer_id"] else None
+    return [farm] if farm and farm["active"] else []
