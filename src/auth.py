@@ -116,11 +116,35 @@ def _tab_email():
         password = st.text_input("Password", type="password", key="login_password")
         go = st.form_submit_button("Log in", type="primary")
     if go:
-        user = accounts.login_password(email, password)
+        try:
+            user = accounts.login_password(email, password)
+        except accounts.PendingApproval:
+            st.info("Your signup is waiting for an admin to approve it. Try again later.")
+            return
         if user:
             _log_in(accounts.session_user(user))
         _wrong()
         st.error(accounts.locked_message(email) or "Wrong email or password.")
+
+
+def _tab_signup():
+    from src import accounts
+
+    st.caption("Sign up here. An admin must approve you before you can log in.")
+    with st.form("signup", clear_on_submit=True):
+        role = st.radio("I am a", ["farmer", "vet"], horizontal=True, key="su_role")
+        name = st.text_input("Your name", key="su_name")
+        phone = st.text_input("Phone (needed for farmers)", placeholder="0712 345 678", key="su_phone")
+        farm = st.text_input("Farm name (farmers)", key="su_farm")
+        email = st.text_input("Email", key="su_email")
+        pw = st.text_input("Choose a password (at least 8 characters)", type="password", key="su_pw")
+        if st.form_submit_button("Sign up", type="primary"):
+            try:
+                accounts.signup(role, name, email, pw, phone or None, farm or None)
+            except ValueError as e:
+                st.error(str(e)[:1].upper() + str(e)[1:] + ".")
+            else:
+                st.success("Thank you. An admin will approve your signup. Then log in with your email and password.")
 
 
 def _tab_owner(expected):
@@ -171,10 +195,10 @@ def require_login(roles=None):
         if _too_many():
             st.error("Too many wrong tries. Reload the page to try again.")
             st.stop()
-        names = ["SMS code", "Email & password"] + (["Owner password"] if owner_pw else [])
+        names = ["SMS code", "Email & password", "Sign up"] + (["Owner password"] if owner_pw else [])
         for tab, name in zip(st.tabs(names), names):
             with tab:
-                {"SMS code": _tab_sms, "Email & password": _tab_email}.get(name, lambda: _tab_owner(owner_pw))()
+                {"SMS code": _tab_sms, "Email & password": _tab_email, "Sign up": _tab_signup}.get(name, lambda: _tab_owner(owner_pw))()
         st.stop()
     if user.get("must_change_password"):
         _force_password_change(user)

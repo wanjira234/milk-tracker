@@ -44,11 +44,11 @@ def no_admin_phone(monkeypatch):
 
 
 @pytest.mark.parametrize("page", PAGES)
-def test_every_page_offers_the_three_logins_and_never_touches_the_database(monkeypatch, page):
+def test_every_page_offers_the_logins_and_never_touches_the_database(monkeypatch, page):
     monkeypatch.setenv("APP_PASSWORD", "open-sesame")
     at = run(page)
     assert not at.exception  # a database call would have raised
-    assert [t.label for t in at.tabs] == ["SMS code", "Email & password", "Owner password"]
+    assert [t.label for t in at.tabs] == ["SMS code", "Email & password", "Sign up", "Owner password"]
     assert key(at, "text_input", "owner_password")
 
 

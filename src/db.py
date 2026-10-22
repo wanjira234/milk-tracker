@@ -240,17 +240,27 @@ def dewormings(farmer_id):
 
 # --- accounts, routes, login codes -----------------------------------------------
 
-USER_COLUMNS = "id, role, name, phone, email, farmer_id, must_change_password, active, failed_logins, locked_until"
+USER_COLUMNS = "id, role, name, phone, email, farmer_id, must_change_password, active, failed_logins, locked_until, pending, farm_name"
 
 
-def create_user(role, name, phone=None, email=None, password_hash=None, farmer_id=None, must_change_password=False):
+def create_user(role, name, phone=None, email=None, password_hash=None, farmer_id=None, must_change_password=False,
+                active=True, pending=False, farm_name=None):
     return _query(
         """
-        INSERT INTO users (role, name, phone, email, password_hash, farmer_id, must_change_password)
-        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+        INSERT INTO users (role, name, phone, email, password_hash, farmer_id, must_change_password, active, pending, farm_name)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
         """,
-        (role, name, phone, email, password_hash, farmer_id, must_change_password), one=True,
+        (role, name, phone, email, password_hash, farmer_id, must_change_password, active, pending, farm_name), one=True,
     )["id"]
+
+
+def list_pending_users():
+    return _query(f"SELECT {USER_COLUMNS}, created_at FROM users WHERE pending ORDER BY created_at, id")
+
+
+def delete_pending_user(user_id):
+    """Reject a signup. Only ever removes a login that is still pending."""
+    _query("DELETE FROM users WHERE id = %s AND pending", (user_id,))
 
 
 def get_user(user_id):
@@ -276,7 +286,7 @@ def list_users(role=None):
 
 
 def update_user(user_id, **fields):
-    allowed = {"name", "phone", "email", "password_hash", "must_change_password", "active", "failed_logins", "locked_until"}
+    allowed = {"name", "phone", "email", "password_hash", "must_change_password", "active", "failed_logins", "locked_until", "pending", "farmer_id"}
     bad = set(fields) - allowed
     if bad:
         raise ValueError(f"cannot update {sorted(bad)}")

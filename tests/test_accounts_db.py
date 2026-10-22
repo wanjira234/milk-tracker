@@ -256,3 +256,77 @@ def test_deleting_a_farm_removes_its_login(farm):
     accounts.create_account("farmer", "Mama", phone="0700000001", farmer_id=farm)
     db._query("DELETE FROM farmers WHERE id = %s", (farm,))
     assert db.list_users() == []
+
+
+# --- self-signup and approval ---------------------------------------------------------------
+
+
+def test_a_signed_up_farmer_cannot_log_in_until_approved_and_then_gets_their_own_farm():
+    uid = accounts.signup("farmer", "Mama Njeri", "Njeri@Example.com", "njeri-pass-1", phone="0700000077", farm_name="Njeri Farm")
+    with pytest.raises(accounts.PendingApproval):
+        accounts.login_password("njeri@example.com", "njeri-pass-1", NOW)
+    assert accounts.login_password("njeri@example.com", "wrong-pass-1", NOW) is None  # a wrong password learns nothing
+    assert db.list_farmers() == []  # no farm record until approved
+    accounts.approve_signup(uid)
+    user = accounts.login_password("njeri@example.com", "njeri-pass-1", NOW)
+    assert user["role"] == "farmer" and user["must_change_password"] is False
+    farm = db.get_farmer(user["farmer_id"])
+    assert farm["name"] == "Mama Njeri" and farm["farm_name"] == "Njeri Farm" and farm["phone"] == "+254700000077"
+    assert [f["id"] for f in accounts.visible_farmers(accounts.session_user(user))] == [farm["id"]]
+
+
+def test_a_pending_login_cannot_use_an_sms_code_either():
+    accounts.signup("farmer", "Mama Njeri", "n@example.com", "njeri-pass-1", phone="0700000077")
+    out = Outbox()
+    assert accounts.request_code("0700000077", out, NOW, owner_phone=None)["status"] == "unknown"
+    assert out.sent == []
+
+
+def test_a_signup_for_a_phone_the_admin_already_registered_links_to_that_farm(farm):
+    uid = accounts.signup("farmer", "Mama Wanjiru", "w@example.com", "wanjiru-pass-1", phone="0700000001")
+    accounts.approve_signup(uid)
+    assert db.get_user(uid)["farmer_id"] == farm and len(db.list_farmers()) == 1
+
+
+def test_a_vet_signup_is_approved_and_can_then_be_given_a_route():
+    uid = accounts.signup("vet", "Dr Kibet", "kibet@example.com", "kibet-pass-1")
+    assert db.list_pending_users()[0]["id"] == uid
+    accounts.approve_signup(uid)
+    assert accounts.login_password("kibet@example.com", "kibet-pass-1", NOW)["role"] == "vet"
+    accounts.allocate_vet(accounts.record_route("4A"), uid)
+    assert db.list_pending_users() == []
+
+
+def test_a_rejected_signup_disappears_and_an_approved_one_cannot_be_rejected():
+    bad = accounts.signup("vet", "Fake", "fake@example.com", "fake-pass-123")
+    accounts.reject_signup(bad)
+    assert db.get_user(bad) is None
+    good = accounts.signup("vet", "Dr Real", "real@example.com", "real-pass-123")
+    accounts.approve_signup(good)
+    accounts.reject_signup(good)  # no effect: it is no longer pending
+    assert db.get_user(good) is not None
+    with pytest.raises(ValueError, match="no longer waiting"):
+        accounts.approve_signup(good)
+
+
+def test_nobody_can_sign_up_as_admin_or_with_bad_details():
+    for kwargs, why in (
+        (dict(role="admin", name="X", email="x@e.co", password="longenough1"), "farmer or vet"),
+        (dict(role="vet", name=" ", email="x@e.co", password="longenough1"), "name"),
+        (dict(role="vet", name="X", email="nope", password="longenough1"), "valid email"),
+        (dict(role="vet", name="X", email="x@e.co", password="short"), "at least"),
+        (dict(role="farmer", name="X", email="x@e.co", password="longenough1"), "phone"),
+        (dict(role="farmer", name="X", email="x@e.co", password="longenough1", phone="123"), "Kenyan"),
+    ):
+        with pytest.raises(ValueError, match=why):
+            accounts.signup(**kwargs)
+    assert db.list_pending_users() == []
+
+
+def test_the_same_email_cannot_sign_up_twice_and_the_waiting_list_is_capped(monkeypatch):
+    accounts.signup("vet", "A", "a@example.com", "longenough1")
+    with pytest.raises(ValueError, match="already"):
+        accounts.signup("vet", "B", "a@example.com", "longenough1")
+    monkeypatch.setattr(accounts, "MAX_PENDING", 1)
+    with pytest.raises(ValueError, match="too many"):
+        accounts.signup("vet", "C", "c@example.com", "longenough1")

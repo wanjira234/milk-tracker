@@ -115,6 +115,10 @@ def verify_code(raw_phone, entered, now=None):
 # --- email + password login --------------------------------------------------------
 
 
+class PendingApproval(Exception):
+    """The email and password are right, but an admin has not approved this signup yet."""
+
+
 def login_password(raw_email, password, now=None):
     """The user row for a correct email + password, else None. Locks the account after repeated failures."""
     now = now or _now()
@@ -124,6 +128,8 @@ def login_password(raw_email, password, now=None):
         verify_password(password or "", DUMMY_HASH)
         return None
     user = db.user_by_email(email)
+    if user and user["pending"] and user.get("password_hash") and verify_password(password or "", user["password_hash"]):
+        raise PendingApproval  # only said to someone who proved they own this signup
     if not user or not user["active"] or not user.get("password_hash"):
         verify_password(password or "", DUMMY_HASH)  # same time as a real check
         return None
@@ -232,3 +238,54 @@ def visible_farmers(user):
         return db.farmers_on_vet_routes(user["id"])
     farm = db.get_farmer(user["farmer_id"]) if user["farmer_id"] else None
     return [farm] if farm and farm["active"] else []
+
+
+# --- self-signup, approved by an admin ------------------------------------------------------
+
+SIGNUP_ROLES = ("farmer", "vet")  # admin is never self-service
+MAX_PENDING = 100  # stops a flood of fake signups filling the approval list
+
+
+def signup(role, name, email, password, phone=None, farm_name=None):
+    """Request a login. It cannot be used until an admin approves it. Returns the new user id."""
+    if role not in SIGNUP_ROLES:
+        raise ValueError("choose farmer or vet")
+    name = " ".join(str(name or "").split())
+    if not name or len(name) > 80:
+        raise ValueError("enter your name")
+    email = normalize_email(email)
+    check_strength(password)
+    if role == "farmer":
+        if not phone:
+            raise ValueError("enter your phone number")
+        farm_name = " ".join(str(farm_name or "").split())[:80] or None
+    else:
+        farm_name = None
+    phone = normalize_phone(phone) if phone else None
+    if len(db.list_pending_users()) >= MAX_PENDING:
+        raise ValueError("too many signups are waiting: try again later or ask the admin")
+    try:
+        return db.create_user(role, name, phone, email, hash_password(password), None,
+                              active=False, pending=True, farm_name=farm_name)
+    except psycopg2.errors.UniqueViolation:
+        raise ValueError("that email or phone number already has an account or a signup waiting") from None
+
+
+def approve_signup(user_id):
+    """Activate a pending login. A farmer is linked to their farm (an existing record with the same
+    phone, else a new one). Raises ValueError when it can't be approved."""
+    user = db.get_user(user_id)
+    if not user or not user["pending"]:
+        raise ValueError("that signup is no longer waiting")
+    farmer_id = None
+    if user["role"] == "farmer":
+        farm = db.farmer_by_phone(user["phone"])
+        if farm and db._query("SELECT 1 FROM users WHERE farmer_id = %s", (farm["id"],), one=True):
+            raise ValueError("that farm already has a login")
+        farmer_id = farm["id"] if farm else db.add_farmer(user["name"], user["phone"], user["farm_name"])
+    db.update_user(user_id, pending=False, active=True, farmer_id=farmer_id)
+    return user_id
+
+
+def reject_signup(user_id):
+    db.delete_pending_user(user_id)
