@@ -13,6 +13,8 @@ from streamlit.testing.v1 import AppTest  # noqa: E402
 
 from src import db  # noqa: E402
 
+from src.auth import OWNER_USER  # noqa: E402
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -24,7 +26,7 @@ def clean(monkeypatch):
 
 def page(name):
     at = AppTest.from_file(os.path.join(ROOT, name), default_timeout=30)
-    at.session_state["logged_in"] = True
+    at.session_state["user"] = dict(OWNER_USER)
     return at.run()
 
 
@@ -174,3 +176,41 @@ def test_adding_a_heifer_and_a_calf_with_a_mother():
     assert not at.exception
     calf = next(c for c in db.list_cows(fid) if c["tag"] == "Nyota")
     assert calf["kind"] == "calf" and calf["dam_id"] == mother
+
+
+def test_admin_page_creates_routes_a_vet_and_a_farmer_login():
+    db._query("TRUNCATE users, routes RESTART IDENTITY CASCADE")
+    fid = db.add_farmer("Sim", "+254700000001", "Sim Farm")
+    at = page("pages/7_admin.py")
+    widget(at, "button", "example_routes").click().run()
+    assert [r["code"] for r in db.list_routes()] == ["4A", "4B", "5A"]
+    at = page("pages/7_admin.py")
+    widget(at, "selectbox", "new_role").select("vet")
+    widget(at, "text_input", "new_name").set_value("Dr Kibet")
+    widget(at, "text_input", "new_phone").set_value("0712345678")
+    next(b for b in at.button if b.label == "Create login").click().run()
+    assert not at.exception and db.list_users("vet")[0]["name"] == "Dr Kibet"
+    at = page("pages/7_admin.py")
+    widget(at, "selectbox", "alloc_vet").select(db.list_users("vet")[0]["id"])
+    next(b for b in at.button if b.label == "Allocate").click().run()
+    assert db.list_routes()[0]["vet_name"] == "Dr Kibet"
+    at = page("pages/7_admin.py")
+    widget(at, "selectbox", "assign_route").select(db.list_routes()[0]["id"])
+    next(b for b in at.button if b.label == "Assign").click().run()
+    assert db.farmers_on_vet_routes(db.list_users("vet")[0]["id"])[0]["id"] == fid
+
+
+def test_a_vet_sees_only_the_farms_on_their_route_in_the_picker():
+    from src import accounts
+
+    db._query("TRUNCATE users, routes RESTART IDENTITY CASCADE")
+    mine, other = db.add_farmer("Mine", "+254700000001"), db.add_farmer("Other", "+254700000002")
+    vet = accounts.create_account("vet", "Dr K", phone="0712345678")
+    route = accounts.record_route("4A")
+    accounts.allocate_vet(route, vet)
+    accounts.assign_route(mine, route)
+    at = AppTest.from_file(os.path.join(ROOT, "pages/1_dashboard.py"), default_timeout=30)
+    at.session_state["user"] = accounts.session_user(db.get_user(vet))
+    at.run()
+    assert not at.exception
+    assert len(at.sidebar.selectbox[0].options) == 1 and "Mine" in at.sidebar.selectbox[0].options[0]
