@@ -569,3 +569,123 @@ def feed_cost_per_kg(farmer_id, start, end):
         (farmer_id, start, end),
     )
     return {r["feed_type"]: float(r["cost_per_kg"]) for r in rows if r["cost_per_kg"] is not None}
+
+
+# --- vets' semen and service requests -----------------------------------------------------------
+
+
+def add_vet_semen(vet_user_id, name, price_kes):
+    """Add a bull/breed with its price, or update the price of one already listed (and relist it)."""
+    return _query(
+        """
+        INSERT INTO vet_semen (vet_user_id, name, price_kes) VALUES (%s, %s, %s)
+        ON CONFLICT (vet_user_id, name) DO UPDATE SET price_kes = EXCLUDED.price_kes, active = TRUE
+        RETURNING id
+        """,
+        (vet_user_id, name, price_kes), one=True,
+    )["id"]
+
+
+def list_vet_semen(vet_user_id, active_only=True):
+    sql = "SELECT id, vet_user_id, name, price_kes, active FROM vet_semen WHERE vet_user_id = %s"
+    if active_only:
+        sql += " AND active"
+    return _query(sql + " ORDER BY name", (vet_user_id,))
+
+
+def get_vet_semen(semen_id):
+    return _query("SELECT id, vet_user_id, name, price_kes, active FROM vet_semen WHERE id = %s", (semen_id,), one=True)
+
+
+def retire_vet_semen(vet_user_id, semen_id):
+    _query("UPDATE vet_semen SET active = FALSE WHERE id = %s AND vet_user_id = %s", (semen_id, vet_user_id))
+
+
+def route_vet_id(farmer_id):
+    """The vet on this farm's route, or None (no route, or the route has no vet)."""
+    row = _query(
+        "SELECT r.vet_user_id FROM farmers f JOIN routes r ON r.id = f.route_id WHERE f.id = %s", (farmer_id,), one=True
+    )
+    return row["vet_user_id"] if row else None
+
+
+REQUEST_SELECT = """
+    SELECT q.id, q.farmer_id, q.cow_id, q.kind, q.notes, q.preferred_date, q.status, q.scheduled_for,
+           q.semen_id, q.semen_price_kes, q.done_on, q.done_by_user_id, q.vet_notes, q.created_at,
+           f.name AS farmer_name, f.farm_name, f.phone AS farmer_phone, r.code AS route_code,
+           r.vet_user_id AS vet_user_id, v.name AS vet_name, c.tag AS cow_tag, s.name AS semen_name
+    FROM service_requests q
+    JOIN farmers f ON f.id = q.farmer_id
+    LEFT JOIN routes r ON r.id = f.route_id
+    LEFT JOIN users v ON v.id = r.vet_user_id
+    LEFT JOIN cows c ON c.id = q.cow_id
+    LEFT JOIN vet_semen s ON s.id = q.semen_id
+"""
+
+
+def add_request(farmer_id, kind, preferred_date, cow_id=None, semen_id=None, semen_price_kes=None, notes=None):
+    return _query(
+        """
+        INSERT INTO service_requests (farmer_id, cow_id, kind, notes, preferred_date, semen_id, semen_price_kes)
+        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
+        """,
+        (farmer_id, cow_id, kind, notes, preferred_date, semen_id, semen_price_kes), one=True,
+    )["id"]
+
+
+def get_request(request_id):
+    return _query(REQUEST_SELECT + " WHERE q.id = %s", (request_id,), one=True)
+
+
+def requests_for_farm(farmer_id, limit=50):
+    return _query(REQUEST_SELECT + " WHERE q.farmer_id = %s ORDER BY q.created_at DESC, q.id DESC LIMIT %s", (farmer_id, limit))
+
+
+def requests_for_vet(vet_user_id, statuses):
+    """Requests from farms on this vet's routes, oldest wish first."""
+    return _query(
+        REQUEST_SELECT + " WHERE r.vet_user_id = %s AND q.status = ANY(%s) "
+        "ORDER BY COALESCE(q.scheduled_for, q.preferred_date), q.id",
+        (vet_user_id, list(statuses)),
+    )
+
+
+def requests_for_attendance(day):
+    """Everything still to do, plus what was finished on `day`: the admin's attended-or-not view."""
+    return _query(
+        REQUEST_SELECT + " WHERE q.status IN ('open', 'scheduled') OR (q.status = 'done' AND q.done_on = %s) "
+        "ORDER BY COALESCE(q.scheduled_for, q.preferred_date), q.id",
+        (day,),
+    )
+
+
+def open_request_count(farmer_id):
+    return _query(
+        "SELECT COUNT(*) AS n FROM service_requests WHERE farmer_id = %s AND status IN ('open', 'scheduled')", (farmer_id,), one=True
+    )["n"]
+
+
+def has_open_request(farmer_id, cow_id, kind):
+    return _query(
+        "SELECT 1 FROM service_requests WHERE farmer_id = %s AND cow_id = %s AND kind = %s AND status IN ('open', 'scheduled')",
+        (farmer_id, cow_id, kind), one=True,
+    ) is not None
+
+
+def update_request(request_id, **fields):
+    allowed = {"status", "scheduled_for", "semen_id", "semen_price_kes", "done_on", "done_by_user_id", "vet_notes"}
+    bad = set(fields) - allowed
+    if bad:
+        raise ValueError(f"cannot update {sorted(bad)}")
+    sets = ", ".join(f"{k} = %s" for k in fields)
+    _query(f"UPDATE service_requests SET {sets} WHERE id = %s", (*fields.values(), request_id))
+
+
+def semen_cost(farmer_id, start, end):
+    """KES of semen on AI visits completed from `start` to `end` inclusive."""
+    row = _query(
+        "SELECT COALESCE(SUM(semen_price_kes), 0) AS kes, COUNT(*) AS n FROM service_requests "
+        "WHERE farmer_id = %s AND kind = 'ai' AND status = 'done' AND semen_price_kes IS NOT NULL AND done_on BETWEEN %s AND %s",
+        (farmer_id, start, end), one=True,
+    )
+    return float(row["kes"]), int(row["n"])

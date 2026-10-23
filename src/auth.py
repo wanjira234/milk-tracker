@@ -179,6 +179,25 @@ def _force_password_change(user):
     st.stop()
 
 
+# The sidebar lists only the pages that make sense for a role. This is tidiness, not security:
+# every page still checks the role itself (require_login(roles=...)) and the data is filtered by role.
+PAGES_BY_ROLE = {
+    "farmer": {"dashboard", "feed_log", "budget", "farm_setup", "cows", "account", "ask_the_vet"},
+    "vet": {"dashboard", "cows", "account", "my_day"},
+    "admin": {"dashboard", "feed_log", "budget", "farm_setup", "cows", "account", "admin", "attendance"},
+}
+ALL_PAGES = set().union(*PAGES_BY_ROLE.values())
+
+
+def hide_other_pages_css(role):
+    """CSS that hides the sidebar links this role has no use for ('' when the role is unknown)."""
+    hidden = sorted(ALL_PAGES - PAGES_BY_ROLE.get(role, ALL_PAGES))
+    if not hidden:
+        return ""
+    rules = ",".join(f'[data-testid="stSidebarNav"] li:has(a[href$="/{name}"])' for name in hidden)
+    return f"<style>{rules}{{display:none}}</style>"
+
+
 def require_login(roles=None):
     """Show the login screen and stop the page until someone is logged in; returns the user.
 
@@ -202,6 +221,9 @@ def require_login(roles=None):
         st.stop()
     if user.get("must_change_password"):
         _force_password_change(user)
+    css = hide_other_pages_css(user["role"])
+    if css:
+        st.markdown(css, unsafe_allow_html=True)
     st.sidebar.caption(f"Signed in: {user['name']} ({user['role']})")
     if st.sidebar.button("Log out"):
         st.session_state.clear()
