@@ -104,3 +104,14 @@ def test_a_temporary_password_must_be_changed_before_anything_else(monkeypatch):
     at.run()
     assert not at.exception and at.title[0].value == "Choose your own password"
     assert not at.metric
+
+
+def test_each_role_sees_only_its_own_pages_in_the_menu():
+    from src.auth import ALL_PAGES, hide_other_pages_css
+
+    farmer, vet, admin = (hide_other_pages_css(r) for r in ("farmer", "vet", "admin"))
+    assert '"/admin"' in farmer and '"/my_day"' in farmer and '"/ask_the_vet"' not in farmer
+    assert '"/ask_the_vet"' in vet and '"/my_day"' not in vet and '"/admin"' in vet
+    assert '"/attendance"' not in admin and '"/my_day"' in admin and '"/ask_the_vet"' in admin
+    assert hide_other_pages_css("stranger") == ""  # unknown role: change nothing (the pages still refuse)
+    assert ALL_PAGES >= {"admin", "my_day", "ask_the_vet", "attendance"}

@@ -51,7 +51,10 @@ if water:
 st.subheader("Profit")
 price_now = db.get_milk_price(farmer_id)
 feed_rows = db.daily_feed(farmer_id, start, today)
-profit = profit_summary(daily, price_now, uncosted=sum(1 for r in feed_rows if r["cost_kes"] is None))
+semen_kes, semen_n = db.semen_cost(farmer_id, start, today)
+profit = profit_summary(
+    daily, price_now, uncosted=sum(1 for r in feed_rows if r["cost_kes"] is None), semen_kes=semen_kes, semen_n=semen_n
+)
 if profit is None:
     st.caption("Set the milk price on the farm setup page, and record complete days, to see your profit here.")
 else:
@@ -66,6 +69,12 @@ else:
     p3.metric("Per litre", f"KES {profit['profit_per_litre']:,.1f}" if profit["profit_per_litre"] is not None else "n/a")
     if profit["feed_per_100"] is not None:
         st.write(f"Out of every KES 100 of milk, **KES {profit['feed_per_100']:,.0f}** went on feed.")
+    if profit["semen_n"]:
+        st.markdown(
+            f"AI semen this period: **KES {profit['semen']:,.0f}** for {profit['semen_n']} visit(s). "
+            "Fresha takes this off your monthly milk payment."
+        )
+        st.metric("Left after feed and semen", f"KES {profit['after_semen']:,.0f}")
     if profit["profit"] < 0:
         st.warning("Feed cost more than the milk earned in this period.")
     st.caption(

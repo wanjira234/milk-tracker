@@ -75,6 +75,14 @@ def test_no_price_or_no_complete_days_gives_nothing_to_show():
     assert profit_summary(daily([]), 50) is None
 
 
+def test_ai_semen_is_a_separate_cost_that_leaves_the_feed_margin_alone():
+    d = daily([(100.0, True, 1000.0), (90.0, True, 900.0)])
+    s = profit_summary(d, 50, semen_kes=2700, semen_n=2)
+    assert s["profit"] == 7600 and s["semen"] == 2700 and s["semen_n"] == 2 and s["after_semen"] == 4900
+    plain = profit_summary(d, 50)
+    assert plain["semen"] == 0 and plain["after_semen"] == plain["profit"]
+
+
 def test_uncosted_entries_are_carried_through():
     assert profit_summary(daily([(100.0, True, 10.0)]), 50, uncosted=3)["uncosted"] == 3
 

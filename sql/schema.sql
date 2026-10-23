@@ -256,3 +256,39 @@ BEGIN
             CHECK (role <> 'farmer' OR farmer_id IS NOT NULL OR pending);
     END IF;
 END $$;
+
+-- ---------------------------------------------------------------------------
+-- Vets: the semen they offer (with prices), and service requests from farmers.
+-- Which vet answers a request is worked out from the farm's route at the time, so changing a
+-- route's vet moves its open requests with it. The semen price is copied onto the request so a
+-- later price change can't alter what the farmer agreed to. Fresha deducts the semen cost from
+-- the monthly milk payment; the app moves no money, it only records the cost.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS vet_semen (
+    id          SERIAL PRIMARY KEY,
+    vet_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name        TEXT    NOT NULL,                       -- e.g. "Friesian - Kamau"
+    price_kes   NUMERIC(10,2) NOT NULL CHECK (price_kes >= 0),
+    active      BOOLEAN NOT NULL DEFAULT TRUE,
+    UNIQUE (vet_user_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS service_requests (
+    id              SERIAL PRIMARY KEY,
+    farmer_id       INTEGER NOT NULL REFERENCES farmers(id) ON DELETE CASCADE,
+    cow_id          INTEGER,
+    kind            TEXT    NOT NULL CHECK (kind IN ('ai', 'sick', 'vaccination', 'other')),
+    notes           TEXT,
+    preferred_date  DATE    NOT NULL,
+    status          TEXT    NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'scheduled', 'done', 'cancelled')),
+    scheduled_for   DATE,
+    semen_id        INTEGER REFERENCES vet_semen(id),
+    semen_price_kes NUMERIC(10,2) CHECK (semen_price_kes IS NULL OR semen_price_kes >= 0),
+    done_on         DATE,
+    done_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    vet_notes       TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    FOREIGN KEY (cow_id, farmer_id) REFERENCES cows (id, farmer_id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_requests_farm   ON service_requests (farmer_id, status);
+CREATE INDEX IF NOT EXISTS idx_requests_status ON service_requests (status, scheduled_for);
