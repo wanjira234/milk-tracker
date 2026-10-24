@@ -344,3 +344,11 @@ CREATE TABLE IF NOT EXISTS owner_lockout (
     locked_until TIMESTAMPTZ
 );
 INSERT INTO owner_lockout (id) VALUES (1) ON CONFLICT DO NOTHING;
+
+-- Route admins: an admin login limited to some routes (a head admin has route_admin FALSE and sees all).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS route_admin BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE TABLE IF NOT EXISTS admin_routes (
+    user_id  INTEGER NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
+    route_id INTEGER NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
+    PRIMARY KEY (user_id, route_id)
+);

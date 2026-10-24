@@ -5,7 +5,7 @@ What is protected, how, and what is not done yet. The application-level items un
 ## In place
 
 **Accounts and roles**
-- Three roles (farmer, vet, admin). A farmer sees only their own farm; a vet only the farms on the routes they are allocated; an admin everything. Every page calls `require_login(roles=...)` and the data itself is filtered in `src/accounts.py`, so hiding a menu link is never the only protection.
+- Three roles (farmer, vet, admin). A farmer sees only their own farm; a vet only the farms on the routes they are allocated; a head admin everything; a route admin only the routes the head admin gave them (set-up, sign-up approval and deletes are head-admin only). Every page calls `require_login(roles=...)` and the data itself is filtered in `src/accounts.py`, so hiding a menu link is never the only protection.
 - Admin is never self-service. Farmers and vets can sign up but cannot log in until an admin approves them, and a farm record is created only at approval. Pending sign-ups are capped.
 - A page opened directly without logging in shows only the sign-in box and never reaches the database.
 

@@ -41,16 +41,22 @@ def add_farmer_form():
 farmers = accounts.visible_farmers(user)
 if user["role"] == "admin":
     # The admin's home is a business overview, not a farm's: farm pages belong to the farmer's own login.
-    routes = db.list_routes()
+    scope = accounts.admin_scope(user)  # None for the head admin; a route admin's routes otherwise
+    routes = [r for r in db.list_routes() if scope is None or r["id"] in scope]
+    vets = [v for v in db.list_users("vet") if scope is None or any(r["vet_user_id"] == v["id"] for r in routes)]
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Farmers", len(farmers))
     c2.metric("Routes", len(routes))
-    c3.metric("Vets", len(db.list_users("vet")))
-    c4.metric("Signups waiting", len(db.list_pending_users()))
-    st.write("Use **Admin** for routes, vets and sign-ups, **Attendance** for today's visits, "
-             "and **Alerts** or **Vaccination** to notify farmers.")
-    with st.expander("Add a farmer without a login", expanded=not farmers):
-        add_farmer_form()
+    c3.metric("Vets", len(vets))
+    if scope is None:
+        c4.metric("Signups waiting", len(db.list_pending_users()))
+        st.write("Use **Admin** for routes, vets and sign-ups, **Attendance** for today's visits, "
+                 "and **Alerts** or **Vaccination** to notify farmers.")
+        with st.expander("Add a farmer without a login", expanded=not farmers):
+            add_farmer_form()
+    else:
+        st.write("You look after " + (", ".join(r["code"] for r in routes) or "no routes yet (ask the head admin)")
+                 + ". Use **Attendance** for today's visits, and **Alerts** or **Vaccination** to notify farmers.")
     st.stop()
 if user["role"] == "vet":
     sheet = services.day_sheet(user, date.today())

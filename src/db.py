@@ -273,17 +273,17 @@ def dewormings(farmer_id):
 
 # --- accounts, routes, login codes -----------------------------------------------
 
-USER_COLUMNS = "id, role, name, phone, email, farmer_id, must_change_password, active, failed_logins, locked_until, pending, farm_name"
+USER_COLUMNS = "id, role, name, phone, email, farmer_id, must_change_password, active, failed_logins, locked_until, pending, farm_name, route_admin"
 
 
 def create_user(role, name, phone=None, email=None, password_hash=None, farmer_id=None, must_change_password=False,
-                active=True, pending=False, farm_name=None):
+                active=True, pending=False, farm_name=None, route_admin=False):
     return _query(
         """
-        INSERT INTO users (role, name, phone, email, password_hash, farmer_id, must_change_password, active, pending, farm_name)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+        INSERT INTO users (role, name, phone, email, password_hash, farmer_id, must_change_password, active, pending, farm_name, route_admin)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
         """,
-        (role, name, phone, email, password_hash, farmer_id, must_change_password, active, pending, farm_name), one=True,
+        (role, name, phone, email, password_hash, farmer_id, must_change_password, active, pending, farm_name, route_admin), one=True,
     )["id"]
 
 
@@ -319,7 +319,7 @@ def list_users(role=None):
 
 
 def update_user(user_id, **fields):
-    allowed = {"name", "phone", "email", "password_hash", "must_change_password", "active", "failed_logins", "locked_until", "pending", "farmer_id"}
+    allowed = {"route_admin", "name", "phone", "email", "password_hash", "must_change_password", "active", "failed_logins", "locked_until", "pending", "farmer_id"}
     bad = set(fields) - allowed
     if bad:
         raise ValueError(f"cannot update {sorted(bad)}")
@@ -364,6 +364,23 @@ def set_owner_lockout(failures, locked_until):
         "ON CONFLICT (id) DO UPDATE SET failures = EXCLUDED.failures, locked_until = EXCLUDED.locked_until",
         (failures, locked_until),
     )
+
+
+def admin_route_ids(user_id):
+    return {r["route_id"] for r in _query("SELECT route_id FROM admin_routes WHERE user_id = %s", (user_id,))}
+
+
+def set_admin_routes(user_id, route_ids):
+    with batch():
+        _query("DELETE FROM admin_routes WHERE user_id = %s", (user_id,))
+        for rid in sorted(set(route_ids)):
+            _query("INSERT INTO admin_routes (user_id, route_id) VALUES (%s, %s)", (user_id, rid))
+
+
+def farmers_on_routes(route_ids):
+    if not route_ids:
+        return []
+    return _query("SELECT * FROM farmers WHERE route_id = ANY(%s) AND active ORDER BY id", (sorted(route_ids),))
 
 
 def farmer_by_phone(phone):
@@ -682,7 +699,7 @@ def route_vet_id(farmer_id):
 REQUEST_SELECT = """
     SELECT q.id, q.farmer_id, q.cow_id, q.kind, q.notes, q.preferred_date, q.status, q.scheduled_for,
            q.semen_id, q.semen_price_kes, q.done_on, q.done_by_user_id, q.vet_notes, q.created_at,
-           f.name AS farmer_name, f.farm_name, f.phone AS farmer_phone, r.code AS route_code,
+           f.name AS farmer_name, f.farm_name, f.phone AS farmer_phone, r.code AS route_code, r.id AS route_id,
            r.vet_user_id AS vet_user_id, v.name AS vet_name, c.tag AS cow_tag, s.name AS semen_name,
            q.vaccination_day_id, q.animals, vd.vaccine
     FROM service_requests q

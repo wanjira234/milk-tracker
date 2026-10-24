@@ -4,7 +4,7 @@ from zoneinfo import ZoneInfo
 
 import streamlit as st
 
-from src import alerts, db, sms
+from src import accounts, alerts, db, sms
 from src.auth import require_login
 from src.ui import cap
 
@@ -27,11 +27,13 @@ def attempt(action, done):
 
 
 if can_post:
-    routes = db.list_routes() if user["role"] == "admin" else [r for r in db.list_routes() if r["vet_user_id"] == user["id"]]
+    scope = accounts.admin_scope(user)  # None: every route (head admin); else a route admin's routes
+    routes = ([r for r in db.list_routes() if scope is None or r["id"] in scope] if user["role"] == "admin"
+              else [r for r in db.list_routes() if r["vet_user_id"] == user["id"]])
     if user["role"] == "vet" and not routes:
         st.info("You have no route yet, so you can't send alerts. Ask the admin.")
     else:
-        choices = ([None] if user["role"] == "admin" else []) + [r["id"] for r in routes]
+        choices = ([None] if user["role"] == "admin" and scope is None else []) + [r["id"] for r in routes]
         labels = {None: "All routes"} | {r["id"]: f"Route {r['code']}" for r in routes}
         with st.expander("New alert", expanded=False):
             with st.form("new_alert", clear_on_submit=True):

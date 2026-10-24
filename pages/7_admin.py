@@ -6,7 +6,10 @@ from src.auth import require_login
 from src.ui import cap
 
 st.set_page_config(page_title="Admin", page_icon="🥛", layout="centered")
-require_login(roles=("admin",))
+admin_login = require_login(roles=("admin",))
+if not accounts.is_head_admin(admin_login):
+    st.error("Only the head admin can open this page.")
+    st.stop()
 
 st.title("Admin")
 st.caption("Routes group farms; each route has one vet. Vets see only the farms on their routes.")
@@ -103,7 +106,8 @@ st.caption(
     "(they must choose their own at first login). Tell them the temporary password in person or by call, never in this app."
 )
 with st.form("create_account", clear_on_submit=True):
-    role = st.selectbox("Role", ["farmer", "vet", "admin"], key="new_role")
+    role = st.selectbox("Role", ["farmer", "vet", "admin", "route admin"], key="new_role",
+                        help="A route admin sees and notifies only the routes you give them.")
     nm = st.text_input("Name", key="new_name")
     ph = st.text_input("Phone", placeholder="0712 345 678", key="new_phone")
     em = st.text_input("Email (for password login)", key="new_email")
@@ -111,11 +115,25 @@ with st.form("create_account", clear_on_submit=True):
     farm_choices = [None] + [f["id"] for f in farmers]
     farm_names = {None: "(vets and admins: none)"} | {f["id"]: f"{f['name']} ({f['farm_name'] or f['phone']})" for f in farmers}
     farm = st.selectbox("Farm (farmers only)", farm_choices, format_func=farm_names.get, key="new_farm")
+    route_names = {r["id"]: r["code"] for r in routes}
+    new_routes = st.multiselect("Routes (route admins only)", list(route_names), format_func=route_names.get, key="new_routes")
     if st.form_submit_button("Create login", type="primary"):
         attempt(
-            lambda: accounts.create_account(role, nm, ph or None, em or None, tp or None, farm),
+            lambda: accounts.create_account("admin" if role == "route admin" else role, nm, ph or None, em or None, tp or None, farm,
+                                            route_ids=new_routes if role == "route admin" else None),
             f"Created the {role} login for {nm.strip()}.",
         )
+
+route_admins = [u for u in users if u["role"] == "admin" and u["route_admin"]]
+if route_admins:
+    st.subheader("Routes for a route admin")
+    with st.form("route_admin_routes"):
+        ra = st.selectbox("Route admin", [u["id"] for u in route_admins], format_func={u["id"]: u["name"] for u in route_admins}.get, key="ra_user")
+        picked = st.multiselect("Routes they look after", [r["id"] for r in routes], default=sorted(db.admin_route_ids(route_admins[0]["id"])),
+                                format_func={r["id"]: r["code"] for r in routes}.get, key="ra_routes")
+        if st.form_submit_button("Save routes"):
+            if attempt(lambda: accounts.set_route_admin_routes(admin_login, ra, picked), "Saved."):
+                st.rerun()
 
 st.subheader("Switch a login off or on")
 if users:

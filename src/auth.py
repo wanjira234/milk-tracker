@@ -232,6 +232,8 @@ def _force_password_change(user):
 _COMMON = [("pages/11_alerts.py", "Alerts"), ("pages/12_vaccination.py", "Vaccination")]
 _ACCOUNT = [("pages/6_account.py", "Account")]
 MENU = {
+    # A route admin runs one or more routes: attendance and notices for them, but no set-up or sign-up approval.
+    "route_admin": [("app.py", "Home"), ("pages/10_attendance.py", "Attendance")] + _COMMON + _ACCOUNT,
     # Daily jobs first, then the vet and notices; the set-up pages come last because the Home checklist leads there.
     "farmer": [("app.py", "Home"), ("pages/2_feed_log.py", "Feed log"), ("pages/1_dashboard.py", "Dashboard"),
                ("pages/9_ask_the_vet.py", "Ask the vet")] + _COMMON
@@ -248,6 +250,10 @@ HIDE_BUILT_IN_NAV_CSS = '<style>[data-testid="stSidebarNav"]{display:none}</styl
 def menu_for(role):
     """[(page file, label)] for a role; empty for an unknown role."""
     return MENU.get(role, [])
+
+
+def menu_key(user):
+    return "route_admin" if user["role"] == "admin" and user.get("route_admin") else user["role"]
 
 
 def render_menu(role):
@@ -289,7 +295,7 @@ def require_login(roles=None):
         st.stop()
     if user.get("must_change_password"):
         _force_password_change(user)
-    render_menu(user["role"])
+    render_menu(menu_key(user))
     st.sidebar.caption(f"Signed in: {user['name']} ({user['role']})")
     if st.sidebar.button("Log out"):
         st.session_state.clear()

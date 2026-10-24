@@ -50,7 +50,20 @@ def session_user(row):
     return {
         "id": row["id"], "role": row["role"], "name": row["name"],
         "farmer_id": row["farmer_id"], "must_change_password": bool(row["must_change_password"]),
+        "route_admin": bool(row.get("route_admin")),
     }
+
+
+def admin_scope(user):
+    """None for anyone who may act on every route (the owner and head admins, and non-admins, who are
+    limited elsewhere); for a route admin, the set of route ids they look after, read fresh each time."""
+    if user["role"] == "admin" and user.get("route_admin") and user.get("id") is not None:
+        return db.admin_route_ids(user["id"])
+    return None
+
+
+def is_head_admin(user):
+    return bool(user) and user["role"] == "admin" and not user.get("route_admin")
 
 
 # --- SMS code login ---------------------------------------------------------------
@@ -196,7 +209,7 @@ def set_password(user_id, new_password, email=None):
 # --- creating accounts (admin) ----------------------------------------------------
 
 
-def create_account(role, name, phone=None, email=None, temp_password=None, farmer_id=None):
+def create_account(role, name, phone=None, email=None, temp_password=None, farmer_id=None, route_ids=None):
     """Create a login. With a temporary password, the person must change it at first login."""
     if role not in ROLES:
         raise ValueError("choose a role")
@@ -220,7 +233,10 @@ def create_account(role, name, phone=None, email=None, temp_password=None, farme
         uid = db.create_user(
             role, name, phone, email,
             hash_password(temp_password) if temp_password else None, farmer_id, must_change_password=bool(temp_password),
+            route_admin=route_ids is not None and role == "admin",
         )
+        if route_ids is not None and role == "admin":
+            db.set_admin_routes(uid, route_ids)
     except psycopg2.errors.UniqueViolation:
         raise ValueError("that phone number, email or farm already has a login") from None
     return uid
@@ -257,7 +273,8 @@ def assign_route(farmer_id, route_id):
 def visible_farmers(user):
     """The farms this person may open: a farmer sees their own, a vet the farms on their routes, an admin all."""
     if user["role"] == "admin":
-        return db.list_farmers()
+        scope = admin_scope(user)
+        return db.list_farmers() if scope is None else db.farmers_on_routes(scope)
     if user["role"] == "vet":
         return db.farmers_on_vet_routes(user["id"])
     farm = db.get_farmer(user["farmer_id"]) if user["farmer_id"] else None
@@ -348,8 +365,20 @@ def delete_own_account(user, confirm):
 
 
 def _need_admin(actor):
-    if not actor or actor.get("role") != "admin":
+    if not is_head_admin(actor):
         raise ValueError("only an admin can do that")
+
+
+def set_route_admin_routes(actor, user_id, route_ids):
+    """The head admin chooses which routes a route admin looks after."""
+    _need_admin(actor)
+    target = db.get_user(user_id)
+    if not target or target["role"] != "admin" or not target["route_admin"]:
+        raise ValueError("choose a route admin")
+    valid = {r["id"] for r in db.list_routes()}
+    if not set(route_ids) <= valid:
+        raise ValueError("choose routes from the list")
+    db.set_admin_routes(user_id, route_ids)
 
 
 def admin_delete_login(actor, user_id, confirm):

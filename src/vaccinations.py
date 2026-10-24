@@ -74,10 +74,9 @@ def cancel_day(user, day_id):
 def days_for(user, today=None):
     """The upcoming vaccination days this login may see."""
     today = today or date.today()
-    if user["role"] == "admin":
-        return db.list_vaccination_days(today)
-    if user["role"] == "vet":
-        return db.list_vaccination_days(today, alerts.routes_of(user))
+    if user["role"] in ("admin", "vet"):
+        allowed = alerts.routes_of(user)
+        return db.list_vaccination_days(today) if allowed is None else db.list_vaccination_days(today, allowed)
     farm = db.get_farmer(user["farmer_id"]) if user["farmer_id"] else None
     return db.list_vaccination_days(today, [farm["route_id"]] if farm and farm["route_id"] else [])
 
