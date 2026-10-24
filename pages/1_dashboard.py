@@ -5,6 +5,8 @@ from itertools import cycle
 import altair as alt
 import streamlit as st
 
+from src.messages import ICON
+
 from src import db
 from src.profit import profit_summary
 from src.water import water_summary
@@ -12,7 +14,7 @@ from src.trends import MILKINGS_PER_DAY, daily_frame, signals, summary
 from src.ui import farmer_selector
 from src.auth import require_login
 
-st.set_page_config(page_title="Dashboard", page_icon="🥛", layout="centered")
+st.set_page_config(page_title="Dashboard", page_icon=ICON, layout="centered")
 require_login(roles=("farmer",))
 st.title("Dashboard")
 

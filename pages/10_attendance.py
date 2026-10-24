@@ -3,10 +3,12 @@ from datetime import date
 
 import streamlit as st
 
+from src.messages import ICON
+
 from src import accounts, services
 from src.auth import require_login
 
-st.set_page_config(page_title="Attendance", page_icon="🥛", layout="centered")
+st.set_page_config(page_title="Attendance", page_icon=ICON, layout="centered")
 user = require_login(roles=("admin",))
 
 st.title("Vet attendance")

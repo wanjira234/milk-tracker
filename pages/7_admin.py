@@ -1,11 +1,13 @@
 """Admin: routes, vets, which farm is on which route, and creating logins."""
 import streamlit as st
 
+from src.messages import ICON
+
 from src import accounts, db
 from src.auth import require_login
 from src.ui import cap
 
-st.set_page_config(page_title="Admin", page_icon="🥛", layout="centered")
+st.set_page_config(page_title="Admin", page_icon=ICON, layout="centered")
 admin_login = require_login(roles=("admin",))
 if not accounts.is_head_admin(admin_login):
     st.error("Only the head admin can open this page.")

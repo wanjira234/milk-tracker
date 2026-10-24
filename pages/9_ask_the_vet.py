@@ -3,11 +3,13 @@ from datetime import date
 
 import streamlit as st
 
+from src.messages import ICON
+
 from src import db, services
 from src.auth import require_login
 from src.ui import cap, farmer_selector
 
-st.set_page_config(page_title="Ask the vet", page_icon="🥛", layout="centered")
+st.set_page_config(page_title="Ask the vet", page_icon=ICON, layout="centered")
 user = require_login(roles=("farmer",))
 farmer_id = farmer_selector()
 
