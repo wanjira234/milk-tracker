@@ -76,6 +76,37 @@ def test_a_truck_load_fed_in_buckets_is_priced_per_bucket():
     assert item["unit"] == "bucket" and float(item["kg_per_unit"]) == 15 and float(item["kes_per_unit"]) == 100
 
 
+def test_wheat_bought_in_50_kg_bags_is_priced_per_bag():
+    fid = db.add_farmer("Sim", "+254700000001", "Sim Farm")
+    at = page("pages/4_farm_setup.py")
+    widget(at, "radio", "calc_how").set_value("I counted it in measures")
+    at.run()
+    widget(at, "text_input", "calc_name").set_value("wheat bran")
+    widget(at, "number_input", "calc_price").set_value(35000)
+    widget(at, "selectbox", "calc_counted").select("50 kg bag")
+    widget(at, "number_input", "calc_count").set_value(100)
+    at.run()
+    widget(at, "selectbox", "calc_pick").select("50 kg bag")
+    widget(at, "button", "calc_save").click().run()
+    item = db.list_catalogue(fid)[0]
+    assert item["unit"] == "bag" and float(item["kg_per_unit"]) == 50 and float(item["kes_per_unit"]) == 350  # 5,000 kg for 35,000
+
+
+def test_feed_grown_on_the_farm_can_be_saved_at_no_cost():
+    fid = db.add_farmer("Sim", "+254700000001", "Sim Farm")
+    at = page("pages/4_farm_setup.py")
+    widget(at, "radio", "calc_source").set_value("I grow or harvest it on my farm")
+    at.run()
+    widget(at, "text_input", "calc_name").set_value("napier")
+    widget(at, "number_input", "calc_days").set_value(10)
+    widget(at, "number_input", "calc_perday").set_value(5)
+    widget(at, "number_input", "calc_bucket").set_value(15)
+    at.run()
+    widget(at, "button", "calc_save").click().run()
+    item = db.list_catalogue(fid)[0]
+    assert item["unit"] == "bucket" and float(item["kes_per_unit"]) == 0
+
+
 def test_the_calculator_refuses_a_save_with_no_feed_name():
     db.add_farmer("Sim", "+254700000001")
     at = page("pages/4_farm_setup.py")

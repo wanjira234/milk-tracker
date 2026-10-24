@@ -41,7 +41,7 @@ def test_nonsense_amounts_are_refused():
 
 
 def test_fixed_measures_match_what_the_farm_uses():
-    assert {u: kg for u, kg in FIXED_MEASURES.values()} == {"tilly": 1.0, "2 kg tilly": 2.0, "mtungi": 20.0}
+    assert {u: kg for u, kg in FIXED_MEASURES.values()} == {"tilly": 1.0, "2 kg tilly": 2.0, "mtungi": 20.0, "bag": 50.0}
 
 
 def test_money_keeps_cents_for_small_prices():
