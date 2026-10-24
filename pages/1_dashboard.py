@@ -12,7 +12,7 @@ from src.ui import farmer_selector
 from src.auth import require_login
 
 st.set_page_config(page_title="Dashboard", page_icon="🥛", layout="centered")
-require_login(roles=("farmer", "vet"))
+require_login(roles=("farmer",))
 st.title("Dashboard")
 
 farmer_id = farmer_selector()

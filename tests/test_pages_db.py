@@ -205,7 +205,7 @@ def test_admin_page_creates_routes_a_vet_and_a_farmer_login():
     assert db.farmers_on_vet_routes(db.list_users("vet")[0]["id"])[0]["id"] == fid
 
 
-def test_a_vet_sees_only_the_farms_on_their_route_in_the_picker():
+def test_a_vet_sees_only_route_farms_and_the_home_page_is_a_visit_overview():
     from src import accounts
 
     db._query("TRUNCATE users, routes RESTART IDENTITY CASCADE")
@@ -214,8 +214,10 @@ def test_a_vet_sees_only_the_farms_on_their_route_in_the_picker():
     route = accounts.record_route("4A")
     accounts.allocate_vet(route, vet)
     accounts.assign_route(mine, route)
-    at = AppTest.from_file(os.path.join(ROOT, "pages/1_dashboard.py"), default_timeout=30)
-    at.session_state["user"] = accounts.session_user(db.get_user(vet))
+    user = accounts.session_user(db.get_user(vet))
+    assert [f["name"] for f in accounts.visible_farmers(user)] == ["Mine"]
+    at = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=30)
+    at.session_state["user"] = user
     at.run()
-    assert not at.exception
-    assert len(at.sidebar.selectbox[0].options) == 1 and "Mine" in at.sidebar.selectbox[0].options[0]
+    assert not at.exception and not at.sidebar.selectbox  # no farm picker: the vet's home is about visits
+    assert [m.label for m in at.metric] == ["Visits today", "Done", "Waiting for a day"]
