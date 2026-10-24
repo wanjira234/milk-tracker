@@ -43,12 +43,20 @@ def no_admin_phone(monkeypatch):
     monkeypatch.delenv("ADMIN_PHONE", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def no_owner_lockout_database(monkeypatch):
+    """These tests run without a database; the shared owner lockout is tested against one in test_accounts_db."""
+    monkeypatch.setattr("src.accounts.owner_locked_message", lambda *a, **k: None)
+    monkeypatch.setattr("src.accounts.owner_login_failed", lambda *a, **k: None)
+    monkeypatch.setattr("src.accounts.owner_login_ok", lambda *a, **k: None)
+
+
 @pytest.mark.parametrize("page", PAGES)
 def test_every_page_offers_the_logins_and_never_touches_the_database(monkeypatch, page):
     monkeypatch.setenv("APP_PASSWORD", "open-sesame")
     at = run(page)
     assert not at.exception  # a database call would have raised
-    assert [t.label for t in at.tabs] == ["SMS code", "Email & password", "Sign up", "Owner password"]
+    assert [t.label for t in at.tabs] == ["Email & password", "SMS code", "Sign up", "Owner password"]
     assert key(at, "text_input", "owner_password")
 
 
@@ -115,6 +123,7 @@ def test_each_role_gets_its_own_menu_and_every_page_is_reachable_by_someone():
     assert "Ask the vet" in labels("farmer") and "Admin" not in labels("farmer") and "My day" not in labels("farmer")
     assert "My day" in labels("vet") and "Ask the vet" not in labels("vet") and "Admin" not in labels("vet")
     assert "Admin" in labels("admin") and "Attendance" in labels("admin") and "My day" not in labels("admin")
+    assert labels("farmer")[:3] == ["Home", "Feed log", "Dashboard"] and labels("farmer")[-1] == "Account"  # daily jobs first
     farm_pages = {"Dashboard", "Feed log", "Budget", "Farm setup", "Cows"}
     assert not farm_pages & set(labels("admin")), "an admin sees a farm only by logging in as that farmer"
     assert farm_pages <= set(labels("farmer")) and not farm_pages & set(labels("vet"))
@@ -127,12 +136,12 @@ def test_each_role_gets_its_own_menu_and_every_page_is_reachable_by_someone():
 
 
 def test_the_sign_in_screen_hides_the_page_menu_and_a_logged_in_page_does_not(monkeypatch):
-    from src.auth import LOGGED_OUT_CSS, TAGLINE
+    from src.auth import LOGGED_OUT_CSS, WELCOME_HTML
 
     monkeypatch.setenv("APP_PASSWORD", "open-sesame")
     at = run("app.py")
-    assert any(LOGGED_OUT_CSS in m.value for m in at.markdown) and at.title[0].value == "Milk Tracker"
-    assert any(TAGLINE in c.value for c in at.caption)
+    assert any(LOGGED_OUT_CSS in m.value for m in at.markdown)
+    assert any(WELCOME_HTML in m.value for m in at.markdown) and "Karibu" in WELCOME_HTML  # the welcome card is fixed text
     in_ = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=20)
     in_.session_state["user"] = {"id": None, "role": "admin", "name": "Owner", "farmer_id": None, "must_change_password": False}
     monkeypatch.setattr("src.accounts.visible_farmers", lambda u: [])

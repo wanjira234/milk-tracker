@@ -76,6 +76,37 @@ def test_a_truck_load_fed_in_buckets_is_priced_per_bucket():
     assert item["unit"] == "bucket" and float(item["kg_per_unit"]) == 15 and float(item["kes_per_unit"]) == 100
 
 
+def test_wheat_bought_in_50_kg_bags_is_priced_per_bag():
+    fid = db.add_farmer("Sim", "+254700000001", "Sim Farm")
+    at = page("pages/4_farm_setup.py")
+    widget(at, "radio", "calc_how").set_value("I counted it in measures")
+    at.run()
+    widget(at, "text_input", "calc_name").set_value("wheat bran")
+    widget(at, "number_input", "calc_price").set_value(35000)
+    widget(at, "selectbox", "calc_counted").select("50 kg bag")
+    widget(at, "number_input", "calc_count").set_value(100)
+    at.run()
+    widget(at, "selectbox", "calc_pick").select("50 kg bag")
+    widget(at, "button", "calc_save").click().run()
+    item = db.list_catalogue(fid)[0]
+    assert item["unit"] == "bag" and float(item["kg_per_unit"]) == 50 and float(item["kes_per_unit"]) == 350  # 5,000 kg for 35,000
+
+
+def test_feed_grown_on_the_farm_can_be_saved_at_no_cost():
+    fid = db.add_farmer("Sim", "+254700000001", "Sim Farm")
+    at = page("pages/4_farm_setup.py")
+    widget(at, "radio", "calc_source").set_value("I grow or harvest it on my farm")
+    at.run()
+    widget(at, "text_input", "calc_name").set_value("napier")
+    widget(at, "number_input", "calc_days").set_value(10)
+    widget(at, "number_input", "calc_perday").set_value(5)
+    widget(at, "number_input", "calc_bucket").set_value(15)
+    at.run()
+    widget(at, "button", "calc_save").click().run()
+    item = db.list_catalogue(fid)[0]
+    assert item["unit"] == "bucket" and float(item["kes_per_unit"]) == 0
+
+
 def test_the_calculator_refuses_a_save_with_no_feed_name():
     db.add_farmer("Sim", "+254700000001")
     at = page("pages/4_farm_setup.py")
@@ -101,6 +132,7 @@ def test_the_dashboard_shows_profit_in_plain_words():
     assert "100 litres" in text and "KES 5,000" in text and "KES 1,000" in text
     assert [m.value for m in at.metric if m.label == "Left after feed"] == ["KES 4,000"]
     assert "KES 20" in text  # out of every KES 100 of milk, KES 20 went on feed
+    assert at.get("vega_lite_chart"), "one complete day must still draw the milk chart (a dot, since a line needs two)"
 
 
 def test_water_logged_in_buckets_is_saved_in_litres_and_shown_on_the_dashboard():
@@ -264,3 +296,18 @@ def test_a_vet_sees_only_route_farms_and_the_home_page_is_a_visit_overview():
     at.run()
     assert not at.exception and not at.sidebar.selectbox  # no farm picker: the vet's home is about visits
     assert [m.label for m in at.metric] == ["Visits today", "Done", "Waiting for a day"]
+
+
+def test_a_new_farmer_home_shows_the_get_started_steps_and_a_finished_farm_does_not():
+    fid = db.add_farmer("Sim", "+254700000001", "Sim Farm")
+    at = page("app.py")
+    assert not at.exception
+    text = " ".join(m.value for m in at.markdown)
+    assert "Get started" in " ".join(h.value for h in at.subheader) and "Set your milk price" in text
+    db.set_milk_price(fid, 50)
+    db.add_cow(fid, "Wanjiku")
+    db.set_cows_in_milk(fid, date.today(), 1)
+    db.upsert_catalogue_item(fid, "napier", "bucket", 15, 100)
+    db.upsert_yield(fid, date.today(), "morning", 10)
+    at = page("app.py")
+    assert not at.exception and not [h for h in at.subheader if h.value == "Get started"]

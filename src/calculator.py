@@ -4,8 +4,8 @@ Pure functions, no Streamlit or database. Everything is an ESTIMATE: a truck loa
 in tillies or mtungis, not weighed, and that is fine. The result is saved to the farm's feed
 catalogue, and from then on logging a feed is just 'how many tillies'.
 
-Fixed measures (agreed with the farm): a 1 kg tilly, a 2 kg tilly and the big cut-off
-mtungi at about 20 kg. A bucket (20 L) holds a different weight of every feed (wet pineapple
+Fixed measures (agreed with the farm): a 1 kg tilly, a 2 kg tilly, the big cut-off
+mtungi at about 20 kg and the 50 kg bag. A bucket (20 L) holds a different weight of every feed (wet pineapple
 waste vs dry bran), so its kg is entered per feed, ideally after weighing one full bucket once.
 """
 MAX_TOTAL_KG = 50_000
@@ -16,6 +16,7 @@ FIXED_MEASURES = {
     "1 kg tilly": ("tilly", 1.0),
     "2 kg tilly": ("2 kg tilly", 2.0),
     "big mtungi (about 20 kg)": ("mtungi", 20.0),
+    "50 kg bag": ("bag", 50.0),  # wheat bran, dairy meal and the like come in 50 kg bags
 }
 
 

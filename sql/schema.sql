@@ -336,3 +336,11 @@ ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS vaccination_day_id INTEGER
 ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS animals INTEGER CHECK (animals IS NULL OR animals > 0);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_one_booking_per_day ON service_requests (vaccination_day_id, farmer_id)
     WHERE vaccination_day_id IS NOT NULL AND status IN ('open', 'scheduled', 'done');
+
+-- The shared owner password is guessed against one counter for everyone, not one per browser session.
+CREATE TABLE IF NOT EXISTS owner_lockout (
+    id           INTEGER PRIMARY KEY CHECK (id = 1),
+    failures     INTEGER NOT NULL DEFAULT 0,
+    locked_until TIMESTAMPTZ
+);
+INSERT INTO owner_lockout (id) VALUES (1) ON CONFLICT DO NOTHING;

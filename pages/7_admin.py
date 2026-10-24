@@ -126,3 +126,42 @@ if users:
             db.update_user(uid, active=(on == "Active"))
             st.success("Saved.")
             st.rerun()
+
+
+st.header("Delete")
+st.caption("Deleting cannot be undone. Each one asks you to type DELETE.")
+admin_user = st.session_state["user"]
+
+with st.expander("Delete a login"):
+    st.caption("Removes the login only. A farmer's farm and records stay; use 'Delete a farm' to remove those as well.")
+    users_now = db.list_users()
+    with st.form("delete_login"):
+        did = st.selectbox("Login", [u["id"] for u in users_now],
+                           format_func={u["id"]: f"{u['name']} ({u['role']})" for u in users_now}.get, key="del_login_id")
+        conf = st.text_input("Type DELETE to confirm", key="del_login_confirm")
+        if st.form_submit_button("Delete login") and attempt(lambda: accounts.admin_delete_login(admin_user, did, conf), "Login deleted."):
+            st.rerun()
+
+with st.expander("Delete a farm and all its records"):
+    farms_now = db.list_farmers(active_only=False)
+    if not farms_now:
+        st.caption("No farms.")
+    else:
+        with st.form("delete_farm"):
+            fid = st.selectbox("Farm", [f["id"] for f in farms_now],
+                               format_func={f["id"]: f"{f['name']} ({f['farm_name'] or f['phone']})" for f in farms_now}.get, key="del_farm_id")
+            conf = st.text_input("Type DELETE to confirm", key="del_farm_confirm")
+            if st.form_submit_button("Delete farm and records") and attempt(lambda: accounts.admin_delete_farm(admin_user, fid, conf), "Farm deleted."):
+                st.rerun()
+
+with st.expander("Delete a route"):
+    st.caption("Its farms stay, without a route. Alerts and vaccination days posted for that route are deleted.")
+    routes_now = db.list_routes()
+    if not routes_now:
+        st.caption("No routes.")
+    else:
+        with st.form("delete_route"):
+            rid = st.selectbox("Route", [r["id"] for r in routes_now], format_func={r["id"]: r["code"] for r in routes_now}.get, key="del_route_id")
+            conf = st.text_input("Type DELETE to confirm", key="del_route_confirm")
+            if st.form_submit_button("Delete route") and attempt(lambda: accounts.admin_delete_route(admin_user, rid, conf), "Route deleted."):
+                st.rerun()

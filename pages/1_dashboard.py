@@ -2,6 +2,7 @@
 from datetime import date, timedelta
 from itertools import cycle
 
+import altair as alt
 import streamlit as st
 
 from src import db
@@ -94,11 +95,24 @@ if stats["partial_days"]:
     )
 
 st.subheader("Milk per day")
-litres = daily["litres"].where(daily["complete"])
-if litres.notna().any():
-    st.line_chart(litres.rename("Litres"), color="#C65D3B")
+if daily["complete"].any() or daily["litres"].notna().any():
+    # A line needs two points, so each day is also a dot: one day of records still shows up.
+    plot = daily[["litres", "complete"]].copy()
+    plot.index.name = "Day"
+    plot = plot.reset_index()
+    plot = plot[plot["litres"].notna() & (plot["litres"] > 0)]
+    plot["Day type"] = plot["complete"].map({True: "All milkings recorded", False: "Some milkings missing"})
+    base = alt.Chart(plot).encode(x=alt.X("Day:T", title=None), y=alt.Y("litres:Q", title="Litres"))
+    complete_days = plot[plot["complete"]]
+    line = alt.Chart(complete_days).mark_line(color="#C65D3B").encode(x="Day:T", y="litres:Q")
+    dots = base.mark_circle(size=90, opacity=1).encode(
+        color=alt.Color("Day type:N", scale=alt.Scale(domain=["All milkings recorded", "Some milkings missing"],
+                                                       range=["#C65D3B", "#B8AEA0"]), legend=alt.Legend(title=None, orient="bottom")),
+        tooltip=[alt.Tooltip("Day:T"), alt.Tooltip("litres:Q", title="Litres", format=".1f"), "Day type:N"],
+    )
+    st.altair_chart(line + dots, width="stretch")
 else:
-    st.caption("No complete days yet.")
+    st.caption("No milk recorded in this period yet.")
 
 st.subheader("Feed per day (kg)")
 if not feed_kg.empty:

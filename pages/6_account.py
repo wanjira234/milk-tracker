@@ -30,3 +30,22 @@ with st.form("set_password", clear_on_submit=True):
             st.success("Saved. You can now log in with your email and password.")
         except ValueError as e:
             st.error(cap(e))
+
+st.header("Delete my account")
+if user["role"] == "farmer":
+    st.warning("This permanently deletes your login, your farm and every record on it: milk, feed, cows, requests. It cannot be undone.")
+elif user["role"] == "vet":
+    st.warning("This permanently deletes your login and your semen list. Your route is left without a vet until the admin allocates one.")
+else:
+    st.warning("This permanently deletes your admin login. You cannot delete the only admin.")
+with st.form("delete_me"):
+    confirm = st.text_input("Type DELETE to confirm", key="delete_me_confirm")
+    if st.form_submit_button("Delete my account"):
+        try:
+            accounts.delete_own_account(user, confirm)
+        except ValueError as e:
+            st.error(cap(e))
+        else:
+            st.session_state.clear()
+            st.session_state["account_deleted"] = True
+            st.rerun()

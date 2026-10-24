@@ -330,3 +330,15 @@ def test_the_same_email_cannot_sign_up_twice_and_the_waiting_list_is_capped(monk
     monkeypatch.setattr(accounts, "MAX_PENDING", 1)
     with pytest.raises(ValueError, match="too many"):
         accounts.signup("vet", "C", "c@example.com", "longenough1")
+
+
+def test_the_shared_owner_password_locks_for_everyone_after_five_wrong_tries():
+    db.set_owner_lockout(0, None)
+    for _ in range(4):
+        accounts.owner_login_failed(NOW)
+    assert accounts.owner_locked_message(NOW) is None
+    accounts.owner_login_failed(NOW)  # the fifth, from any browser
+    assert "locked" in accounts.owner_locked_message(NOW + timedelta(minutes=1))
+    assert accounts.owner_locked_message(NOW + timedelta(minutes=16)) is None  # it lifts by itself
+    accounts.owner_login_ok()
+    assert db.owner_lockout()["failures"] == 0

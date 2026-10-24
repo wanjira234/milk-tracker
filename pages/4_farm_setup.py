@@ -62,11 +62,19 @@ else:
 LOAD = "A load I feed out in buckets"
 with st.expander("Feed calculator: a truck load, bales or bags", expanded=not catalogue):
     st.caption(
-        "Bought a truck load that you shred and feed in buckets? Say what you paid and how long it lasted, "
+        "Bought a truck load, or cut feed from your own farm, that you shred and feed in buckets? Say what it cost and how long it lasted, "
         "and this works out what one bucket costs. An estimate is fine."
     )
     calc_name = st.text_input("Which feed?", placeholder="napier", key="calc_name")
-    calc_price = st.number_input("What did you pay for it? (KES)", min_value=0.0, step=500.0, format="%.0f", key="calc_price")
+    source = st.radio("Where does it come from?", ["I buy it", "I grow or harvest it on my farm"], horizontal=True, key="calc_source")
+    if source == "I buy it":
+        calc_price = st.number_input("What did you pay for it? (KES)", min_value=0.0, step=500.0, format="%.0f", key="calc_price")
+    else:
+        calc_price = st.number_input(
+            "What did it cost you to grow, if you know? (KES, 0 if not)", min_value=0.0, step=500.0, format="%.0f", key="calc_price",
+            help="Seed, fertiliser or casual labour you paid for. Leave 0 to count it as free. Your own land and time are not counted.",
+        )
+        st.caption("For feed from your own farm, say how much you cut, and how long it lasted.")
     how = st.radio(
         "How do you know how much you got?", [LOAD, "I counted it in measures", "I know the kg"],
         key="calc_how",
@@ -97,11 +105,11 @@ with st.expander("Feed calculator: a truck load, bales or bags", expanded=not ca
     else:
         c1, c2 = st.columns(2)
         counted_in = c1.selectbox(
-            "Counted in", ["big mtungi (about 20 kg)", "1 kg tilly", "2 kg tilly", "20 L bucket", "something else"],
+            "Counted in", ["big mtungi (about 20 kg)", "1 kg tilly", "2 kg tilly", "50 kg bag", "20 L bucket", "something else"],
             key="calc_counted",
         )
         calc_count = c2.number_input("How many", min_value=0.0, step=10.0, format="%.0f", key="calc_count")
-        each = {"big mtungi (about 20 kg)": 20.0, "1 kg tilly": 1.0, "2 kg tilly": 2.0}.get(counted_in)
+        each = {"big mtungi (about 20 kg)": 20.0, "1 kg tilly": 1.0, "2 kg tilly": 2.0, "50 kg bag": 50.0}.get(counted_in)
         if each is None:
             each = st.number_input(
                 "Kg in one" + (" full bucket (weigh one once)" if counted_in == "20 L bucket" else ""),
@@ -155,7 +163,7 @@ with st.form("add_feed_item", clear_on_submit=True):
     kg_per_unit = st.number_input("Kg in one unit", min_value=0.0, step=1.0, format="%.1f")
     kes_per_unit = st.number_input("Price of one unit (KES)", min_value=0.0, step=5.0, format="%.0f")
     st.caption(
-        "Bought in bulk? Divide it down. A truck load that costs KES 15,000 and holds about 4,000 kg "
+        "Grew it yourself? Put 0, or what it cost you. Bought in bulk? Divide it down. A truck load that costs KES 15,000 and holds about 4,000 kg "
         "makes a 40 kg wheelbarrow cost KES 150. Saving a feed that already exists updates its price."
     )
     if st.form_submit_button("Save feed", type="primary"):

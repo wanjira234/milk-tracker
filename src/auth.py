@@ -62,8 +62,25 @@ LOGGED_OUT_CSS = (
     "<style>"
     '[data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"],[data-testid="stExpandSidebarButton"]'
     "{display:none}"
-    ".block-container{max-width:520px;padding-top:4rem}"
+    ".block-container{max-width:560px;padding-top:2.5rem}"
+    # Large touch targets and 16px text in the boxes (a smaller size makes phones zoom in on focus).
+    "button[kind],[data-testid='stFormSubmitButton'] button{min-height:3rem}"
+    "input{font-size:16px !important}"
+    ".welcome{background:linear-gradient(135deg,#0F2E20 0%,#1F5A3A 100%);color:#FFF8EA;border-radius:24px;"
+    "padding:2rem 1.75rem;margin-bottom:1.25rem}"
+    ".welcome .hello{color:#F2A93B;font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:.85rem}"
+    ".welcome .name{font-size:2.4rem;font-weight:700;line-height:1.1;margin:.35rem 0 .5rem}"
+    ".welcome .promise{font-size:1.15rem;color:#E8F1EA;margin-bottom:1rem}"
+    ".welcome .chips span{display:inline-block;background:#F2A93B;color:#0F2E20;font-weight:600;font-size:.9rem;"
+    "border-radius:999px;padding:.25rem .8rem;margin:0 .4rem .4rem 0}"
     "</style>"
+)
+# Fixed text only: nothing a visitor types is ever put into this block.
+WELCOME_HTML = (
+    '<div class="welcome"><div class="hello">Karibu · Welcome</div>'
+    f'<div class="name">{APP_NAME}</div>'
+    '<div class="promise">Know what your feed is worth, and get your vet and your milk route in one place.</div>'
+    '<div class="chips"><span>Farmers</span><span>Vets</span><span>Milk buyers</span></div></div>'
 )
 TAGLINE = "Know what your feed is worth."
 
@@ -144,12 +161,14 @@ def _tab_email():
 def _tab_signup():
     from src import accounts
 
-    st.caption("Sign up here. An admin must approve you before you can log in.")
+    st.caption("Three quick steps: sign up here, the milk buyer's admin approves you, then log in on the Email & password tab.")
+    role = st.radio("I am a", ["farmer", "vet"], horizontal=True, key="su_role")  # outside the form so the fields change
     with st.form("signup", clear_on_submit=True):
-        role = st.radio("I am a", ["farmer", "vet"], horizontal=True, key="su_role")
         name = st.text_input("Your name", key="su_name")
-        phone = st.text_input("Phone (needed for farmers)", placeholder="0712 345 678", key="su_phone")
-        farm = st.text_input("Farm name (farmers)", key="su_farm")
+        phone = farm = None
+        if role == "farmer":
+            phone = st.text_input("Phone", placeholder="0712 345 678", key="su_phone", help="Your SMS advice and alerts come to this number.")
+            farm = st.text_input("Farm name (optional)", key="su_farm")
         email = st.text_input("Email", key="su_email")
         pw = st.text_input("Choose a password (at least 8 characters)", type="password", key="su_pw")
         if st.form_submit_button("Sign up", type="primary"):
@@ -158,15 +177,28 @@ def _tab_signup():
             except ValueError as e:
                 st.error(str(e)[:1].upper() + str(e)[1:] + ".")
             else:
-                st.success("Thank you. An admin will approve your signup. Then log in with your email and password.")
+                st.success(
+                    "You are signed up. The admin has to approve you before you can log in. "
+                    "Once approved, log in on the Email & password tab. "
+                    + ("Your Home page will then guide you through setting up your farm." if role == "farmer"
+                       else "Your My day page will show your route's visits.")
+                )
 
 
 def _tab_owner(expected):
+    from src import accounts
+
+    locked = accounts.owner_locked_message()
+    if locked:
+        st.error(locked)
+        return
     with st.form("owner_login"):
         entered = st.text_input("Owner password", type="password", key="owner_password")
         if st.form_submit_button("Log in", type="primary"):
             if password_ok(entered, expected):
+                accounts.owner_login_ok()
                 _log_in(dict(OWNER_USER))
+            accounts.owner_login_failed()
             _wrong()
             st.error("Wrong password.")
 
@@ -198,11 +230,12 @@ def _force_password_change(user):
 # This is tidiness, not security: every page still checks the role itself (require_login(roles=...))
 # and the data is filtered by role.
 _COMMON = [("pages/11_alerts.py", "Alerts"), ("pages/12_vaccination.py", "Vaccination")]
-_FARM_DATA = [("pages/1_dashboard.py", "Dashboard"), ("pages/2_feed_log.py", "Feed log"), ("pages/3_budget.py", "Budget"),
-              ("pages/4_farm_setup.py", "Farm setup"), ("pages/5_cows.py", "Cows")]
 _ACCOUNT = [("pages/6_account.py", "Account")]
 MENU = {
-    "farmer": [("app.py", "Home"), ("pages/9_ask_the_vet.py", "Ask the vet")] + _COMMON + _FARM_DATA + _ACCOUNT,
+    # Daily jobs first, then the vet and notices; the set-up pages come last because the Home checklist leads there.
+    "farmer": [("app.py", "Home"), ("pages/2_feed_log.py", "Feed log"), ("pages/1_dashboard.py", "Dashboard"),
+               ("pages/9_ask_the_vet.py", "Ask the vet")] + _COMMON
+              + [("pages/5_cows.py", "Cows"), ("pages/3_budget.py", "Budget"), ("pages/4_farm_setup.py", "Farm setup")] + _ACCOUNT,
     # The vet works from My day; a farm's dashboard and cow records are the farmer's own view.
     "vet": [("app.py", "Home"), ("pages/8_my_day.py", "My day")] + _COMMON + _ACCOUNT,
     # The admin runs the business and sees no farm-data pages: to see a farmer's view, log in as that farmer.
@@ -243,12 +276,13 @@ def require_login(roles=None):
     user = current_user()
     if not user:
         st.markdown(LOGGED_OUT_CSS, unsafe_allow_html=True)
-        st.title(APP_NAME)
-        st.caption(TAGLINE)
+        st.markdown(WELCOME_HTML, unsafe_allow_html=True)
+        if st.session_state.pop("account_deleted", False):
+            st.success("Your account and its records have been deleted.")
         if _too_many():
             st.error("Too many wrong tries. Reload the page to try again.")
             st.stop()
-        names = ["SMS code", "Email & password", "Sign up"] + (["Owner password"] if owner_pw else [])
+        names = ["Email & password", "SMS code", "Sign up"] + (["Owner password"] if owner_pw else [])
         for tab, name in zip(st.tabs(names), names):
             with tab:
                 {"SMS code": _tab_sms, "Email & password": _tab_email, "Sign up": _tab_signup}.get(name, lambda: _tab_owner(owner_pw))()
