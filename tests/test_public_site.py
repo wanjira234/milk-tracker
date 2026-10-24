@@ -29,3 +29,12 @@ def test_hero_uses_video_when_present(monkeypatch, tmp_path):
 
 def test_static_serving_is_on():
     assert "enableStaticServing = true" in open(".streamlit/config.toml").read()
+
+
+def test_cards_flip_and_every_card_has_a_back():
+    steps, roles = public_site._steps(), public_site._roles()
+    assert steps.count('class="flipc"') == 3 and roles.count('class="flipc"') == 3
+    for html in (steps, roles):
+        assert html.count(" front\"") == html.count(" back\"") == 3
+        assert 'tabindex="0"' in html and "aria-label=" in html  # reachable by keyboard and named for screen readers
+    assert "flipc" in public_site.GOTO_JS and "data-tilt" in public_site._bento()
