@@ -183,3 +183,20 @@ with st.expander("Delete a route"):
             conf = st.text_input("Type DELETE to confirm", key="del_route_confirm")
             if st.form_submit_button("Delete route") and attempt(lambda: accounts.admin_delete_route(admin_user, rid, conf), "Route deleted."):
                 st.rerun()
+
+
+st.header("Messages from the Contact us form")
+msgs = db.list_contact_messages(30)
+if not msgs:
+    st.caption("No messages.")
+for m in msgs:
+    with st.container(border=True):
+        st.markdown(f"**{m['name']}** · {m['contact']}" + (" · handled" if m["handled"] else ""))
+        st.text(m["message"])  # shown as plain text, whatever the visitor typed
+        c1, c2 = st.columns(2)
+        if c1.button("Mark handled" if not m["handled"] else "Mark not handled", key=f"msg_h_{m['id']}"):
+            db.set_message_handled(m["id"], not m["handled"])
+            st.rerun()
+        if c2.button("Delete", key=f"msg_d_{m['id']}"):
+            db.delete_contact_message(m["id"])
+            st.rerun()
