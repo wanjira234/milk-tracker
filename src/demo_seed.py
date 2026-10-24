@@ -82,7 +82,8 @@ def main(ask=input):
     if ask("Type the word demo to continue: ").strip().lower() != "demo":
         print("Cancelled. Nothing changed.")
         return 1
-    made = create_demo()
+    with db.batch():  # one connection, all-or-nothing: fast, and an interrupted run leaves nothing half-seeded
+        made = create_demo()
     if not made:
         print("Demo accounts already exist. Nothing changed.")
         return 0
