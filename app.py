@@ -3,7 +3,7 @@ from datetime import date, timedelta
 
 import streamlit as st
 
-from src import accounts, db
+from src import accounts, db, services
 from src.ingestion.manual_entry import normalize_phone
 from src.ui import cap, farmer_selector
 from src.auth import require_login
@@ -49,6 +49,14 @@ if user["role"] == "admin":
              "and **Alerts** or **Vaccination** to notify farmers.")
     with st.expander("Add a farmer without a login", expanded=not farmers):
         add_farmer_form()
+    st.stop()
+if user["role"] == "vet":
+    sheet = services.day_sheet(user, date.today())
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Visits today", sheet["total"])
+    c2.metric("Done", sheet["done"])
+    c3.metric("Waiting for a day", len(services.inbox(user)))
+    st.write("Open **My day** for today's farms, what to carry and your semen list.")
     st.stop()
 if not farmers:
     st.info("No farm is linked to your login yet. Ask your admin.")

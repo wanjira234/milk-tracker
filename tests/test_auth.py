@@ -117,7 +117,7 @@ def test_each_role_gets_its_own_menu_and_every_page_is_reachable_by_someone():
     assert "Admin" in labels("admin") and "Attendance" in labels("admin") and "My day" not in labels("admin")
     farm_pages = {"Dashboard", "Feed log", "Budget", "Farm setup", "Cows"}
     assert not farm_pages & set(labels("admin")), "an admin sees a farm only by logging in as that farmer"
-    assert {"Feed log", "Budget", "Farm setup"} <= set(labels("farmer")) and not {"Feed log", "Budget", "Farm setup"} & set(labels("vet"))
+    assert farm_pages <= set(labels("farmer")) and not farm_pages & set(labels("vet"))
     for role in MENU:  # alerts and vaccination are for everyone, and every link points at a real file
         assert {"Alerts", "Vaccination", "Home", "Account"} <= set(labels(role))
         assert all(os.path.exists(os.path.join(ROOT, path)) for path, _ in menu_for(role))
@@ -140,10 +140,11 @@ def test_the_sign_in_screen_hides_the_page_menu_and_a_logged_in_page_does_not(mo
     assert not any(LOGGED_OUT_CSS in m.value for m in in_.markdown)
 
 
-def test_farm_pages_are_closed_to_the_admin(monkeypatch):
+@pytest.mark.parametrize("role", ["admin", "vet"])
+def test_farm_pages_are_closed_to_the_admin_and_the_vet(monkeypatch, role):
     monkeypatch.setattr("src.db.list_farmers", lambda *a, **k: [])
     for path in ("pages/1_dashboard.py", "pages/2_feed_log.py", "pages/3_budget.py", "pages/4_farm_setup.py", "pages/5_cows.py"):
         at = AppTest.from_file(os.path.join(ROOT, path), default_timeout=20)
-        at.session_state["user"] = {"id": None, "role": "admin", "name": "Owner", "farmer_id": None, "must_change_password": False}
+        at.session_state["user"] = {"id": None, "role": role, "name": "X", "farmer_id": None, "must_change_password": False}
         at = at.run()
         assert not at.exception and not at.metric and not at.number_input, path
