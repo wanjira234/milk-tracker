@@ -57,7 +57,8 @@ def test_the_public_pages_render_and_the_form_saves_without_logging_in():
     at = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=30).run()
     assert not at.exception
     text = " ".join(m.value for m in at.markdown)
-    assert "How it works" in " ".join(h.value for h in at.subheader) and "About" in " ".join(h.value for h in at.subheader)
+    assert "How it works" in text and "Get started" in text  # the landing page
+    assert "About" in " ".join(h.value for h in at.subheader)
     next(t for t in at.text_input if t.key == "contact_name").set_value("Wanjiru")
     next(t for t in at.text_input if t.key == "contact_how").set_value("wanjiru@example.com")
     next(t for t in at.text_area if t.key == "contact_message").set_value("Please tell me how to join a route.")
