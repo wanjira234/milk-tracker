@@ -69,7 +69,19 @@ def create_demo(password=None, today=None):
     return made
 
 
-def main():
+def database_host():
+    """Where DATABASE_URL points (host only: the password is never shown)."""
+    from urllib.parse import urlparse
+
+    return urlparse(os.environ.get("DATABASE_URL", "")).hostname or "unknown"
+
+
+def main(ask=input):
+    print(f"This writes demo accounts and SIMULATED farm data into the database at: {database_host()}")
+    print("Do this only on your separate DEMO project, never on the real farm database.")
+    if ask("Type the word demo to continue: ").strip().lower() != "demo":
+        print("Cancelled. Nothing changed.")
+        return 1
     made = create_demo()
     if not made:
         print("Demo accounts already exist. Nothing changed.")
