@@ -62,7 +62,8 @@ LOGGED_OUT_CSS = (
     "<style>@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@600&display=swap');"
     '[data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"],[data-testid="stExpandSidebarButton"]'
     "{display:none}"
-    ".block-container{max-width:1120px;padding-top:2rem}"
+    ".block-container{max-width:1120px;padding-top:5.2rem;padding-bottom:0}"
+    '[data-testid="stHeader"]{display:none}'
     # The page links live in our own top bar; hide only the outer tab strip (not the Email / SMS tabs inside Log in).
     '[data-testid="stTabs"]:not([data-testid="stTabs"] [data-testid="stTabs"]) > div > [role="tablist"]{display:none}'
     # Large touch targets and 16px text in the boxes (a smaller size makes phones zoom in on focus).
@@ -278,11 +279,12 @@ def require_login(roles=None):
         if _too_many():
             st.error("Too many wrong tries. Reload the page to try again.")
             st.stop()
-        top = ["Home", "Log in", "Sign up", "About us", "Contact us"]
-        t_home, t_login, t_signup, t_about, t_contact = st.tabs(top)
+        top = ["Home", "Log in", "Sign up"]
+        t_home, t_login, t_signup = st.tabs(top)
         with t_home:
             public_site.render_home()
         with t_login:
+            public_site.page_title("Welcome back", "Log in to see your farm, your route or the admin view.")
             mid = st.columns([1, 3, 1])[1]  # a narrow form reads better than one stretched across the page
             with mid:
                 methods = ["Email & password", "SMS code"] + (["Owner password"] if owner_pw else [])
@@ -291,13 +293,10 @@ def require_login(roles=None):
                         {"SMS code": _tab_sms, "Email & password": _tab_email}.get(name, lambda: _tab_owner(owner_pw))()
             public_site.render_footer()
         with t_signup:
+            public_site.page_title("Create your account", "Farmers, vets and milk-buyer staff each get their own view.")
             with st.columns([1, 3, 1])[1]:
                 _tab_signup()
             public_site.render_footer()
-        with t_about:
-            public_site.render_about()
-        with t_contact:
-            public_site.render_contact()
         st.stop()
     if user.get("must_change_password"):
         _force_password_change(user)
