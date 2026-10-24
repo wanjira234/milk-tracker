@@ -1,5 +1,6 @@
 """Postgres access layer. Raw SQL via psycopg2 on purpose: no ORM."""
 import os
+import threading
 from contextlib import contextmanager
 from datetime import date
 
@@ -14,9 +15,41 @@ except ImportError:  # dotenv is optional at runtime (Modal passes env directly)
     pass
 
 
+_local = threading.local()
+
+
+@contextmanager
+def batch():
+    """Run many queries on ONE connection and ONE transaction: fast on a slow link, and all-or-nothing.
+
+    For scripts that write a lot (the demo seed). Not for code that wants to catch a database error
+    and carry on: after a failed statement the whole batch is rolled back. Nested use joins the
+    outer batch. Each thread has its own, so web requests are unaffected.
+    """
+    if getattr(_local, "conn", None) is not None:
+        yield
+        return
+    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    _local.conn = conn
+    try:
+        yield
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        _local.conn = None
+        conn.close()
+
+
 @contextmanager
 def get_conn():
-    """Yield a connection; commit on success, roll back on error, always close."""
+    """Yield a connection; commit on success, roll back on error, always close.
+    Inside `batch()` the shared connection is used instead and the batch does the commit."""
+    shared = getattr(_local, "conn", None)
+    if shared is not None:
+        yield shared
+        return
     conn = psycopg2.connect(os.environ["DATABASE_URL"])
     try:
         yield conn
