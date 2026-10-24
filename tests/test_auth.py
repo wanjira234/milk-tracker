@@ -56,7 +56,7 @@ def test_every_page_offers_the_logins_and_never_touches_the_database(monkeypatch
     monkeypatch.setenv("APP_PASSWORD", "open-sesame")
     at = run(page)
     assert not at.exception  # a database call would have raised
-    assert {"Home", "Log in", "Sign up", "About us", "Contact us"} <= {t.label for t in at.tabs}  # the public site
+    assert {"Home", "Log in", "Sign up"} <= {t.label for t in at.tabs}  # the public site
     assert {"Email & password", "SMS code", "Owner password"} <= {t.label for t in at.tabs}  # the ways to log in
     assert key(at, "text_input", "owner_password")
 
@@ -142,7 +142,7 @@ def test_the_sign_in_screen_hides_the_page_menu_and_a_logged_in_page_does_not(mo
     monkeypatch.setenv("APP_PASSWORD", "open-sesame")
     at = run("app.py")
     assert any(LOGGED_OUT_CSS in m.value for m in at.markdown)
-    assert any("Maziwa" in m.value and 'data-goto="About us"' in m.value for m in at.markdown)  # our own top bar
+    assert any("Maziwa" in m.value and 'data-scroll="about"' in m.value for m in at.markdown)  # our own top bar
     in_ = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=20)
     in_.session_state["user"] = {"id": None, "role": "admin", "name": "Owner", "farmer_id": None, "must_change_password": False}
     monkeypatch.setattr("src.accounts.visible_farmers", lambda u: [])
