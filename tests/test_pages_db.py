@@ -98,9 +98,17 @@ def test_water_logged_in_buckets_is_saved_in_litres_and_shown_on_the_dashboard()
 
 
 def test_the_cows_page_adds_a_cow_records_a_service_and_shows_her_status():
+    from src import accounts
+
+    db._query("TRUNCATE users, routes RESTART IDENTITY CASCADE")
     fid = db.add_farmer("Sim", "+254700000001")
-    db.add_semen(fid, "Friesian - Kamau")
+    vet = accounts.create_account("vet", "Dr K", phone="0712345678")
+    route = accounts.record_route("4A")
+    accounts.allocate_vet(route, vet)
+    accounts.assign_route(fid, route)
+    db.add_vet_semen(vet, "Friesian - Kamau", 3500)  # the farmer picks from the route vet's list
     at = page("pages/5_cows.py")
+    assert not any(t.key == "new_semen" for t in at.text_input)  # a farmer cannot make up semen choices
     at.text_input(key="new_cow").set_value("Wanjiku")
     next(b for b in at.button if b.key == "add_cow").click()
     at.run()
@@ -116,6 +124,19 @@ def test_the_cows_page_adds_a_cow_records_a_service_and_shows_her_status():
     assert "Wanjiku" in text and "Served" in text and "Friesian - Kamau" in text
     assert "Deworming: Never recorded" in text
     assert any("Saved" in s.value for s in at.success)  # the message survives the reload
+
+
+def test_with_no_route_vet_a_service_is_saved_without_semen():
+    from src import accounts
+
+    db._query("TRUNCATE users, routes RESTART IDENTITY CASCADE")
+    fid = db.add_farmer("Sim", "+254700000001")
+    db.add_cow(fid, "Wanjiku")
+    at = page("pages/5_cows.py")
+    at.selectbox(key="ev_kind").set_value("served")
+    at.run()
+    assert not at.exception and not [x for x in at.selectbox if x.key == "ev_semen"]
+    assert any("not on a route" in c.value for c in at.caption)
 
 
 def test_the_cows_page_refuses_a_pregnancy_result_with_no_service():
