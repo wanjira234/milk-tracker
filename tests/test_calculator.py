@@ -115,3 +115,12 @@ def test_water_summary_averages_over_recorded_days_only():
     s = water_summary([{"log_date": D, "litres": 100}, {"log_date": D, "litres": 140}], cows=6)
     assert s["days"] == 2 and s["avg_per_day"] == 120 and s["per_cow"] == 20
     assert water_summary([{"log_date": D, "litres": 100}])["per_cow"] is None
+
+
+def test_a_load_fed_out_over_days_is_counted_in_buckets():
+    from src.calculator import load_buckets
+
+    assert load_buckets(10, 5) == 50
+    for bad in ((0, 5), (10, 0), (-1, 5), ("x", 5), (10_000, 100)):
+        with pytest.raises(ValueError):
+            load_buckets(*bad)

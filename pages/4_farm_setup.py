@@ -5,7 +5,7 @@ import pandas as pd
 import streamlit as st
 
 from src import db
-from src.calculator import breakdown, money, total_kg
+from src.calculator import breakdown, load_buckets, money, total_kg
 from src.ingestion.manual_entry import (
     record_catalogue_item,
     record_cows_in_milk,
@@ -59,17 +59,40 @@ if catalogue:
 else:
     st.info("No feeds yet. Add the first one below.")
 
-with st.expander("Feed calculator: truck loads and rough measures"):
+LOAD = "A load I feed out in buckets"
+with st.expander("Feed calculator: a truck load, bales or bags", expanded=not catalogue):
     st.caption(
-        "Bought a whole truck, or feed you measure with a tilly, a mtungi or a bucket? Enter what you paid and "
-        "roughly how much you got, and this works out the price of each measure. It is an estimate, and that is fine."
+        "Bought a truck load that you shred and feed in buckets? Say what you paid and how long it lasted, "
+        "and this works out what one bucket costs. An estimate is fine."
     )
-    calc_name = st.text_input("Feed", placeholder="napier", key="calc_name")
-    calc_price = st.number_input("Total price paid (KES)", min_value=0.0, step=500.0, format="%.0f", key="calc_price")
+    calc_name = st.text_input("Which feed?", placeholder="napier", key="calc_name")
+    calc_price = st.number_input("What did you pay for it? (KES)", min_value=0.0, step=500.0, format="%.0f", key="calc_price")
     how = st.radio(
-        "How much did you get?", ["I counted it in measures", "I know the kg"], horizontal=True, key="calc_how"
+        "How do you know how much you got?", [LOAD, "I counted it in measures", "I know the kg"],
+        key="calc_how",
     )
-    if how == "I know the kg":
+    bucket_kg = None
+    if how == LOAD:
+        c1, c2 = st.columns(2)
+        days = c1.number_input("It lasted about (days)", min_value=0.0, step=1.0, format="%.0f", key="calc_days")
+        per_day = c2.number_input("Buckets fed a day", min_value=0.0, step=1.0, format="%.0f", key="calc_perday")
+        bucket_kg = st.number_input(
+            "Kg in one full bucket (weigh one once)", min_value=0.0, step=1.0, format="%.1f", key="calc_bucket",
+            help="A full 20 L bucket of fresh shredded napier weighs far more than a bucket of dry hay, so weigh one "
+                 "full bucket of this feed once, on any scale.",
+        )
+        calc_kg_total = None
+        try:
+            buckets = load_buckets(days, per_day) if days and per_day else None
+        except ValueError as e:
+            st.error(cap(e))
+            buckets = None
+        if buckets and calc_price >= 0 and bucket_kg:
+            calc_kg_total = buckets * bucket_kg
+        elif buckets:
+            st.markdown(f"**About {buckets:,.0f} buckets: {money(calc_price / buckets)} a bucket.**")
+            st.caption("Weigh one full bucket and enter its kg above, to save this feed and to see the price per kg.")
+    elif how == "I know the kg":
         calc_kg_total = st.number_input("Total kg", min_value=0.0, step=100.0, format="%.0f", key="calc_kg")
     else:
         c1, c2 = st.columns(2)
@@ -89,10 +112,8 @@ with st.expander("Feed calculator: truck loads and rough measures"):
             calc_kg_total = total_kg(calc_count, each) if calc_count and each else None
         except ValueError as e:
             st.error(cap(e))
-    bucket_kg = st.number_input(
-        "Kg in one full 20 L bucket of this feed (optional)", min_value=0.0, step=1.0, format="%.1f", key="calc_bucket",
-        help="A bucket of wet pineapple waste weighs a lot more than a bucket of dry bran. Weigh one full bucket once.",
-    )
+        if counted_in == "20 L bucket" and each:
+            bucket_kg = each
     if calc_kg_total:
         try:
             rows = breakdown(calc_price, calc_kg_total, bucket_kg or None)
@@ -100,16 +121,23 @@ with st.expander("Feed calculator: truck loads and rough measures"):
             st.error(cap(e))
             rows = []
         if rows:
-            st.markdown(f"**About {calc_kg_total:,.0f} kg for KES {calc_price:,.0f}: {money(calc_price / calc_kg_total)} per kg**")
-            st.dataframe(
-                pd.DataFrame({
-                    "Measure": [r["measure"] for r in rows],
-                    "Kg": [r["kg"] for r in rows],
-                    "Price": [money(r["kes"]) for r in rows],
-                }),
-                hide_index=True, width="stretch",
-            )
-            pick = st.selectbox("Save to my feeds as", [r["measure"] for r in rows], key="calc_pick")
+            if how == LOAD:
+                row_bucket = next(r for r in rows if r["unit"] == "bucket")
+                st.markdown(f"**One bucket of {calc_name or 'this feed'} costs about {money(row_bucket['kes'])}** "
+                            f"({money(calc_price / calc_kg_total)} per kg).")
+                rows = [row_bucket]
+            else:
+                st.markdown(f"**About {calc_kg_total:,.0f} kg for KES {calc_price:,.0f}: {money(calc_price / calc_kg_total)} per kg**")
+                st.dataframe(
+                    pd.DataFrame({
+                        "Measure": [r["measure"] for r in rows],
+                        "Kg": [r["kg"] for r in rows],
+                        "Price": [money(r["kes"]) for r in rows],
+                    }),
+                    hide_index=True, width="stretch",
+                )
+            pick = rows[0]["measure"] if len(rows) == 1 else st.selectbox(
+                "Save to my feeds as", [r["measure"] for r in rows], key="calc_pick")
             if st.button("Save this feed", type="primary", key="calc_save"):
                 row = next(r for r in rows if r["measure"] == pick)
                 try:
@@ -117,11 +145,11 @@ with st.expander("Feed calculator: truck loads and rough measures"):
                     st.success(f"Saved {saved['name']}: 1 {saved['unit']} = {saved['kg_per_unit']:g} kg, {money(saved['kes_per_unit'])}.")
                 except ValueError as e:
                     st.error(cap(e))
-    else:
+    elif how != LOAD:
         st.caption("Fill in the price and how much you got to see the result.")
 
 with st.form("add_feed_item", clear_on_submit=True):
-    st.markdown("**Add or update a feed**")
+    st.markdown("**Already know the price of one unit? Add or update a feed**")
     name = st.text_input("Feed", placeholder="banana trunks")
     unit = st.text_input("Unit", placeholder="trunk, wheelbarrow, bag...")
     kg_per_unit = st.number_input("Kg in one unit", min_value=0.0, step=1.0, format="%.1f")
