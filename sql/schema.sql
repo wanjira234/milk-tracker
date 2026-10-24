@@ -352,3 +352,13 @@ CREATE TABLE IF NOT EXISTS admin_routes (
     route_id INTEGER NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
     PRIMARY KEY (user_id, route_id)
 );
+
+-- Messages from the public Contact us form; the head admin reads and clears them.
+CREATE TABLE IF NOT EXISTS contact_messages (
+    id         SERIAL PRIMARY KEY,
+    name       TEXT NOT NULL,
+    contact    TEXT NOT NULL,
+    message    TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    handled    BOOLEAN NOT NULL DEFAULT FALSE
+);

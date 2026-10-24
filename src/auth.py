@@ -59,28 +59,24 @@ def password_ok(entered, expected):
 # Before login there is nothing to navigate to, so the page menu is hidden: a visitor sees only the
 # sign-in box. (Tidiness only: every page still refuses a visitor who is not logged in.)
 LOGGED_OUT_CSS = (
-    "<style>"
+    "<style>@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@600&display=swap');"
     '[data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"],[data-testid="stExpandSidebarButton"]'
     "{display:none}"
-    ".block-container{max-width:560px;padding-top:2.5rem}"
+    ".block-container{max-width:1120px;padding-top:2rem}"
     # Large touch targets and 16px text in the boxes (a smaller size makes phones zoom in on focus).
     "button[kind],[data-testid='stFormSubmitButton'] button{min-height:3rem}"
     "input{font-size:16px !important}"
-    ".welcome{background:linear-gradient(135deg,#0F2E20 0%,#1F5A3A 100%);color:#FFF8EA;border-radius:24px;"
-    "padding:2rem 1.75rem;margin-bottom:1.25rem}"
-    ".welcome .hello{color:#F2A93B;font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:.85rem}"
-    ".welcome .name{font-size:2.4rem;font-weight:700;line-height:1.1;margin:.35rem 0 .5rem}"
-    ".welcome .promise{font-size:1.15rem;color:#E8F1EA;margin-bottom:1rem}"
-    ".welcome .chips span{display:inline-block;background:#F2A93B;color:#0F2E20;font-weight:600;font-size:.9rem;"
-    "border-radius:999px;padding:.25rem .8rem;margin:0 .4rem .4rem 0}"
+    ".welcome{display:flex;flex-wrap:wrap;align-items:baseline;gap:.2rem .8rem;padding:0 .25rem 1rem}"
+    ".welcome .hello{color:#B8741A;font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:.8rem}"
+    ".welcome .name{font-family:Fredoka,sans-serif;font-size:1.6rem;font-weight:600;color:#0F2E20}"
+    ".welcome .promise{color:#3F5247;font-size:1rem}"
     "</style>"
 )
 # Fixed text only: nothing a visitor types is ever put into this block.
 WELCOME_HTML = (
-    '<div class="welcome"><div class="hello">Karibu · Welcome</div>'
-    f'<div class="name">{APP_NAME}</div>'
-    '<div class="promise">Know what your feed is worth, and get your vet and your milk route in one place.</div>'
-    '<div class="chips"><span>Farmers</span><span>Vets</span><span>Milk buyers</span></div></div>'
+    '<div class="welcome"><span class="hello">Karibu</span>'
+    f'<span class="name">{APP_NAME}</span>'
+    '<span class="promise">Know what your feed is worth.</span></div>'
 )
 TAGLINE = "Know what your feed is worth."
 
@@ -288,10 +284,26 @@ def require_login(roles=None):
         if _too_many():
             st.error("Too many wrong tries. Reload the page to try again.")
             st.stop()
-        names = ["Email & password", "SMS code", "Sign up"] + (["Owner password"] if owner_pw else [])
-        for tab, name in zip(st.tabs(names), names):
-            with tab:
-                {"SMS code": _tab_sms, "Email & password": _tab_email, "Sign up": _tab_signup}.get(name, lambda: _tab_owner(owner_pw))()
+        from src import public_site
+
+        top = ["Home", "Log in", "Sign up", "About us", "Contact us"]
+        t_home, t_login, t_signup, t_about, t_contact = st.tabs(top)
+        with t_home:
+            public_site.render_home()
+        with t_login:
+            mid = st.columns([1, 3, 1])[1]  # a narrow form reads better than one stretched across the page
+            with mid:
+                methods = ["Email & password", "SMS code"] + (["Owner password"] if owner_pw else [])
+                for tab, name in zip(st.tabs(methods), methods):
+                    with tab:
+                        {"SMS code": _tab_sms, "Email & password": _tab_email}.get(name, lambda: _tab_owner(owner_pw))()
+        with t_signup:
+            with st.columns([1, 3, 1])[1]:
+                _tab_signup()
+        with t_about:
+            public_site.render_about()
+        with t_contact:
+            public_site.render_contact()
         st.stop()
     if user.get("must_change_password"):
         _force_password_change(user)
