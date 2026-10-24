@@ -101,6 +101,7 @@ def test_the_dashboard_shows_profit_in_plain_words():
     assert "100 litres" in text and "KES 5,000" in text and "KES 1,000" in text
     assert [m.value for m in at.metric if m.label == "Left after feed"] == ["KES 4,000"]
     assert "KES 20" in text  # out of every KES 100 of milk, KES 20 went on feed
+    assert at.get("vega_lite_chart"), "one complete day must still draw the milk chart (a dot, since a line needs two)"
 
 
 def test_water_logged_in_buckets_is_saved_in_litres_and_shown_on_the_dashboard():
