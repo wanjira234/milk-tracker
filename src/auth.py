@@ -20,6 +20,8 @@ import time
 
 import streamlit as st
 
+from src.messages import APP_NAME
+
 MAX_WRONG = 5  # wrong guesses allowed per browser session before it locks until reload
 
 OWNER_USER = {"id": None, "role": "admin", "name": "Owner", "farmer_id": None, "must_change_password": False}
@@ -52,6 +54,18 @@ def password_ok(entered, expected):
     if not expected or not entered:
         return False
     return hmac.compare_digest(entered.encode(), expected.encode())
+
+
+# Before login there is nothing to navigate to, so the page menu is hidden: a visitor sees only the
+# sign-in box. (Tidiness only: every page still refuses a visitor who is not logged in.)
+LOGGED_OUT_CSS = (
+    "<style>"
+    '[data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"],[data-testid="stExpandSidebarButton"]'
+    "{display:none}"
+    ".block-container{max-width:520px;padding-top:4rem}"
+    "</style>"
+)
+TAGLINE = "Know what your feed is worth."
 
 
 def current_user():
@@ -210,7 +224,9 @@ def require_login(roles=None):
         st.stop()
     user = current_user()
     if not user:
-        st.title("Milk Tracker")
+        st.markdown(LOGGED_OUT_CSS, unsafe_allow_html=True)
+        st.title(APP_NAME)
+        st.caption(TAGLINE)
         if _too_many():
             st.error("Too many wrong tries. Reload the page to try again.")
             st.stop()
