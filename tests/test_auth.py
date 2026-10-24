@@ -73,12 +73,14 @@ def test_wrong_owner_password_is_refused_and_locks_after_too_many_tries(monkeypa
 
 def test_right_owner_password_logs_in_as_admin(monkeypatch):
     monkeypatch.setenv("APP_PASSWORD", "open-sesame")
-    monkeypatch.setattr("src.db.list_farmers", lambda *a, **k: [])  # stand-in for the database
+    for fn in ("list_farmers", "list_routes", "list_users", "list_pending_users"):
+        monkeypatch.setattr(f"src.db.{fn}", lambda *a, **k: [])  # stand-in for the database
     at = run("app.py")
     key(at, "text_input", "owner_password").set_value("open-sesame")
     at.button[-1].click().run()
     assert not at.exception and at.session_state["user"]["role"] == "admin"
-    assert at.expander[0].label == "Add a farmer"  # the real home page is showing
+    assert at.expander[0].label == "Add a farmer without a login"  # the admin overview is showing
+    assert at.metric[0].label == "Farmers"
     assert any(b.label == "Log out" for b in at.sidebar.button)
 
 
@@ -113,6 +115,9 @@ def test_each_role_gets_its_own_menu_and_every_page_is_reachable_by_someone():
     assert "Ask the vet" in labels("farmer") and "Admin" not in labels("farmer") and "My day" not in labels("farmer")
     assert "My day" in labels("vet") and "Ask the vet" not in labels("vet") and "Admin" not in labels("vet")
     assert "Admin" in labels("admin") and "Attendance" in labels("admin") and "My day" not in labels("admin")
+    farm_pages = {"Dashboard", "Feed log", "Budget", "Farm setup", "Cows"}
+    assert not farm_pages & set(labels("admin")), "an admin sees a farm only by logging in as that farmer"
+    assert {"Feed log", "Budget", "Farm setup"} <= set(labels("farmer")) and not {"Feed log", "Budget", "Farm setup"} & set(labels("vet"))
     for role in MENU:  # alerts and vaccination are for everyone, and every link points at a real file
         assert {"Alerts", "Vaccination", "Home", "Account"} <= set(labels(role))
         assert all(os.path.exists(os.path.join(ROOT, path)) for path, _ in menu_for(role))
@@ -133,3 +138,12 @@ def test_the_sign_in_screen_hides_the_page_menu_and_a_logged_in_page_does_not(mo
     monkeypatch.setattr("src.accounts.visible_farmers", lambda u: [])
     in_.run()
     assert not any(LOGGED_OUT_CSS in m.value for m in in_.markdown)
+
+
+def test_farm_pages_are_closed_to_the_admin(monkeypatch):
+    monkeypatch.setattr("src.db.list_farmers", lambda *a, **k: [])
+    for path in ("pages/1_dashboard.py", "pages/2_feed_log.py", "pages/3_budget.py", "pages/4_farm_setup.py", "pages/5_cows.py"):
+        at = AppTest.from_file(os.path.join(ROOT, path), default_timeout=20)
+        at.session_state["user"] = {"id": None, "role": "admin", "name": "Owner", "farmer_id": None, "must_change_password": False}
+        at = at.run()
+        assert not at.exception and not at.metric and not at.number_input, path

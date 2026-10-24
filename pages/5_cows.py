@@ -20,7 +20,7 @@ from src.ingestion.manual_entry import (
 from src.ui import cap, farmer_selector
 
 st.set_page_config(page_title="Cows", page_icon="🥛", layout="centered")
-require_login()
+require_login(roles=("farmer", "vet"))
 st.title("Cows")
 st.caption(
     "Keep each animal's heat, service, calving and dry period, who her mother is, and when she was last dewormed. "
