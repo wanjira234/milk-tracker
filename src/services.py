@@ -185,10 +185,12 @@ def day_sheet(vet_user, day):
 # --- admin side -------------------------------------------------------------------------------
 
 
-def attendance(day):
+def attendance(day, routes=None):
     """Per vet: how many of the day's visits are done, how many are still to do, and how many are late.
     Requests on farms with no vet are listed apart, because nobody is answering them."""
     rows = db.requests_for_attendance(day)
+    if routes is not None:  # a route admin sees only their routes' requests
+        rows = [q for q in rows if q["route_id"] in routes]
     vets, unattended = {}, []
     for q in rows:
         if q["vet_user_id"] is None:

@@ -3,7 +3,7 @@ from datetime import date, timedelta
 
 import streamlit as st
 
-from src import db, services, vaccinations
+from src import accounts, db, services, vaccinations
 from src.auth import require_login
 from src.ui import cap, farmer_selector
 
@@ -26,11 +26,13 @@ def attempt(action, done):
 
 
 if not is_farmer:
-    routes = db.list_routes() if user["role"] == "admin" else [r for r in db.list_routes() if r["vet_user_id"] == user["id"]]
+    scope = accounts.admin_scope(user)  # None: every route (head admin); else a route admin's routes
+    routes = ([r for r in db.list_routes() if scope is None or r["id"] in scope] if user["role"] == "admin"
+              else [r for r in db.list_routes() if r["vet_user_id"] == user["id"]])
     if user["role"] == "vet" and not routes:
         st.info("You have no route yet, so you can't post vaccination days. Ask the admin.")
     else:
-        choices = ([None] if user["role"] == "admin" else []) + [r["id"] for r in routes]
+        choices = ([None] if user["role"] == "admin" and scope is None else []) + [r["id"] for r in routes]
         labels = {None: "All routes"} | {r["id"]: f"Route {r['code']}" for r in routes}
         with st.expander("Post a vaccination day"):
             with st.form("post_day", clear_on_submit=True):

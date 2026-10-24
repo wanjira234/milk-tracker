@@ -14,7 +14,7 @@ Three roles, each with its own menu and its own data:
 |---|---|
 | **Farmer** | Logs milk (3 milkings a day), feed and water in litres; uses a feed calculator (truck load to price per mtungi or kg); sees feed margin and AI semen cost; keeps herd records (cows, heifers, calves, breeding, dry period, deworming); asks the vet for AI, a sick-cow visit or anything else; books vaccination days; reads outbreak alerts; receives SMS advice. |
 | **Vet** | Keeps a priced semen list; sees a "my day" sheet with the visits, the farms and what to carry; schedules and completes visits (an AI visit also records the service on the cow); posts vaccination days and alerts for their own routes. |
-| **Admin** (the milk buyer) | Creates routes and allocates vets; approves sign-ups; posts outbreak alerts and vaccination days for any route; texts alerts; sees each vet's attended, to-do and late visits for the day. |
+| **Admin** (the milk buyer) | Creates routes and allocates vets; approves sign-ups; posts outbreak alerts and vaccination days for any route; texts alerts; sees each vet's attended, to-do and late visits for the day. | A route admin is an admin limited to the routes the head admin gives them: they see those routes' attendance, send alerts and vaccination days for them, and cannot reach set-up, sign-ups or deletes. |
 
 ### How the feed advice works
 

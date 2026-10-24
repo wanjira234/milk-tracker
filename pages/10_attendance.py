@@ -3,15 +3,15 @@ from datetime import date
 
 import streamlit as st
 
-from src import services
+from src import accounts, services
 from src.auth import require_login
 
 st.set_page_config(page_title="Attendance", page_icon="🥛", layout="centered")
-require_login(roles=("admin",))
+user = require_login(roles=("admin",))
 
 st.title("Vet attendance")
 day = st.date_input("Day", value=date.today(), key="att_day")
-view = services.attendance(day)
+view = services.attendance(day, accounts.admin_scope(user))
 
 
 def line(q):

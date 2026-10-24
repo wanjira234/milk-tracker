@@ -20,7 +20,7 @@ MAX_BODY = 400
 def routes_of(user):
     """None = any route (admin); otherwise the set of route ids this vet looks after."""
     if user["role"] == "admin":
-        return None
+        return accounts.admin_scope(user)
     if user["role"] == "vet":
         return {r["id"] for r in db.list_routes() if r["vet_user_id"] == user["id"]}
     raise ValueError("only an admin or a vet can send alerts")
@@ -105,15 +105,14 @@ def send_alert_sms(alert_id, user, client=None):
 def visible_alerts(user, today=None):
     """The alerts this login may read: admin all; vet their routes' plus all-route ones; farmer their route's."""
     today = today or date.today()
-    if user["role"] == "admin":
-        return db.list_alerts(today)
-    if user["role"] == "vet":
-        return db.list_alerts(today, routes_of(user))
+    if user["role"] in ("admin", "vet"):
+        allowed = routes_of(user)
+        return db.list_alerts(today) if allowed is None else db.list_alerts(today, allowed)
     farm = db.get_farmer(user["farmer_id"]) if user["farmer_id"] else None
     return db.list_alerts(today, [farm["route_id"]] if farm and farm["route_id"] else [])
 
 
 def outbox(user, limit=50):
     """The SMS the system sent to the farms this login may see, newest first."""
-    ids = None if user["role"] == "admin" else [f["id"] for f in accounts.visible_farmers(user)]
+    ids = None if (user["role"] == "admin" and accounts.admin_scope(user) is None) else [f["id"] for f in accounts.visible_farmers(user)]
     return db.sms_outbox(ids, limit)
