@@ -3,6 +3,8 @@ from datetime import date
 
 import streamlit as st
 
+from src.messages import ICON
+
 from src import db
 from src.budget import (
     budget_status,
@@ -14,7 +16,7 @@ from src.budget import (
 from src.ui import farmer_selector
 from src.auth import require_login
 
-st.set_page_config(page_title="Budget", page_icon="🥛", layout="centered")
+st.set_page_config(page_title="Budget", page_icon=ICON, layout="centered")
 require_login(roles=("farmer",))
 st.title("Feed budget")
 

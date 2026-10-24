@@ -9,6 +9,7 @@ always something the model actually said.
 
 The Swahili wording is a DRAFT: have a Kiswahili speaker read it before any farmer gets it.
 """
+import os
 import math
 import re
 
@@ -16,6 +17,7 @@ from src.sms import MAX_SEGMENTS, gsm_length, sms_segments
 from src.suggestions import MAX_STEP
 
 APP_NAME = "Maziwa Plus"
+ICON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "img", "logo.png")  # browser-tab icon
 LANGUAGES = ("en", "sw")
 
 # --- facts ------------------------------------------------------------------

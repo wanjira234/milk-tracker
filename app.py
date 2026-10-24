@@ -3,13 +3,15 @@ from datetime import date, timedelta
 
 import streamlit as st
 
+from src.messages import ICON
+
 from src import accounts, db, services
 from src.onboarding import checklist, next_step
 from src.ingestion.manual_entry import normalize_phone
 from src.ui import cap, farmer_selector
 from src.auth import require_login
 
-st.set_page_config(page_title="Milk Tracker", page_icon="🥛", layout="centered")
+st.set_page_config(page_title="Maziwa Plus", page_icon=ICON, layout="centered")
 user = require_login()
 
 first_name = (user.get("name") or "").split()[0] if (user.get("name") or "").split() else ""

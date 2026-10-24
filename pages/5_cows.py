@@ -4,6 +4,8 @@ from datetime import date
 
 import streamlit as st
 
+from src.messages import ICON
+
 from src import db
 from src.auth import require_login
 from src.breeding import DEWORM_EVERY_DAYS, KINDS, deworm_status
@@ -18,7 +20,7 @@ from src.ingestion.manual_entry import (
 )
 from src.ui import cap, farmer_selector
 
-st.set_page_config(page_title="Cows", page_icon="🥛", layout="centered")
+st.set_page_config(page_title="Cows", page_icon=ICON, layout="centered")
 require_login(roles=("farmer",))
 st.title("Cows")
 st.caption(
