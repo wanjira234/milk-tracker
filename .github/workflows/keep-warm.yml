@@ -1,0 +1,14 @@
+# Streamlit Cloud sleeps an app that has had no visitors for a while; the first visitor then waits
+# for a full boot. This pings the public page every 6 hours so a demo or judge opens it warm.
+# Set the repo variable APP_URL (Settings > Secrets and variables > Actions > Variables) to the app link.
+name: keep-warm
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    if: ${{ vars.APP_URL != '' }}
+    steps:
+      - run: curl -fsS -m 60 -o /dev/null -w "%{http_code}\n" "${{ vars.APP_URL }}" || true
