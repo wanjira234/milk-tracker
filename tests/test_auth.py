@@ -115,3 +115,17 @@ def test_each_role_sees_only_its_own_pages_in_the_menu():
     assert '"/attendance"' not in admin and '"/my_day"' in admin and '"/ask_the_vet"' in admin
     assert hide_other_pages_css("stranger") == ""  # unknown role: change nothing (the pages still refuse)
     assert ALL_PAGES >= {"admin", "my_day", "ask_the_vet", "attendance"}
+
+
+def test_the_sign_in_screen_hides_the_page_menu_and_a_logged_in_page_does_not(monkeypatch):
+    from src.auth import LOGGED_OUT_CSS, TAGLINE
+
+    monkeypatch.setenv("APP_PASSWORD", "open-sesame")
+    at = run("app.py")
+    assert any(LOGGED_OUT_CSS in m.value for m in at.markdown) and at.title[0].value == "Milk Tracker"
+    assert any(TAGLINE in c.value for c in at.caption)
+    in_ = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=20)
+    in_.session_state["user"] = {"id": None, "role": "admin", "name": "Owner", "farmer_id": None, "must_change_password": False}
+    monkeypatch.setattr("src.accounts.visible_farmers", lambda u: [])
+    in_.run()
+    assert not any(LOGGED_OUT_CSS in m.value for m in in_.markdown)
