@@ -62,8 +62,25 @@ LOGGED_OUT_CSS = (
     "<style>"
     '[data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"],[data-testid="stExpandSidebarButton"]'
     "{display:none}"
-    ".block-container{max-width:520px;padding-top:4rem}"
+    ".block-container{max-width:560px;padding-top:2.5rem}"
+    # Large touch targets and 16px text in the boxes (a smaller size makes phones zoom in on focus).
+    "button[kind],[data-testid='stFormSubmitButton'] button{min-height:3rem}"
+    "input{font-size:16px !important}"
+    ".welcome{background:linear-gradient(135deg,#0F2E20 0%,#1F5A3A 100%);color:#FFF8EA;border-radius:24px;"
+    "padding:2rem 1.75rem;margin-bottom:1.25rem}"
+    ".welcome .hello{color:#F2A93B;font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:.85rem}"
+    ".welcome .name{font-size:2.4rem;font-weight:700;line-height:1.1;margin:.35rem 0 .5rem}"
+    ".welcome .promise{font-size:1.15rem;color:#E8F1EA;margin-bottom:1rem}"
+    ".welcome .chips span{display:inline-block;background:#F2A93B;color:#0F2E20;font-weight:600;font-size:.9rem;"
+    "border-radius:999px;padding:.25rem .8rem;margin:0 .4rem .4rem 0}"
     "</style>"
+)
+# Fixed text only: nothing a visitor types is ever put into this block.
+WELCOME_HTML = (
+    '<div class="welcome"><div class="hello">Karibu · Welcome</div>'
+    f'<div class="name">{APP_NAME}</div>'
+    '<div class="promise">Know what your feed is worth, and get your vet and your milk route in one place.</div>'
+    '<div class="chips"><span>Farmers</span><span>Vets</span><span>Milk buyers</span></div></div>'
 )
 TAGLINE = "Know what your feed is worth."
 
@@ -259,14 +276,13 @@ def require_login(roles=None):
     user = current_user()
     if not user:
         st.markdown(LOGGED_OUT_CSS, unsafe_allow_html=True)
-        st.title(APP_NAME)
-        st.caption(TAGLINE)
+        st.markdown(WELCOME_HTML, unsafe_allow_html=True)
         if st.session_state.pop("account_deleted", False):
             st.success("Your account and its records have been deleted.")
         if _too_many():
             st.error("Too many wrong tries. Reload the page to try again.")
             st.stop()
-        names = ["SMS code", "Email & password", "Sign up"] + (["Owner password"] if owner_pw else [])
+        names = ["Email & password", "SMS code", "Sign up"] + (["Owner password"] if owner_pw else [])
         for tab, name in zip(st.tabs(names), names):
             with tab:
                 {"SMS code": _tab_sms, "Email & password": _tab_email, "Sign up": _tab_signup}.get(name, lambda: _tab_owner(owner_pw))()

@@ -12,8 +12,9 @@ from src.auth import require_login
 st.set_page_config(page_title="Milk Tracker", page_icon="🥛", layout="centered")
 user = require_login()
 
-st.title("Milk Tracker")
-st.caption("Yield and feed tracking for smallholder dairy farms.")
+first_name = (user.get("name") or "").split()[0] if (user.get("name") or "").split() else ""
+st.title(f"Hello, {first_name}" if first_name and user["id"] is not None else "Welcome")
+st.caption({"farmer": "Your farm today.", "vet": "Your visits today.", "admin": "The milk route at a glance."}.get(user["role"], ""))
 
 
 def add_farmer_form():

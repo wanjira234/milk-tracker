@@ -56,7 +56,7 @@ def test_every_page_offers_the_logins_and_never_touches_the_database(monkeypatch
     monkeypatch.setenv("APP_PASSWORD", "open-sesame")
     at = run(page)
     assert not at.exception  # a database call would have raised
-    assert [t.label for t in at.tabs] == ["SMS code", "Email & password", "Sign up", "Owner password"]
+    assert [t.label for t in at.tabs] == ["Email & password", "SMS code", "Sign up", "Owner password"]
     assert key(at, "text_input", "owner_password")
 
 
@@ -136,12 +136,12 @@ def test_each_role_gets_its_own_menu_and_every_page_is_reachable_by_someone():
 
 
 def test_the_sign_in_screen_hides_the_page_menu_and_a_logged_in_page_does_not(monkeypatch):
-    from src.auth import LOGGED_OUT_CSS, TAGLINE
+    from src.auth import LOGGED_OUT_CSS, WELCOME_HTML
 
     monkeypatch.setenv("APP_PASSWORD", "open-sesame")
     at = run("app.py")
-    assert any(LOGGED_OUT_CSS in m.value for m in at.markdown) and at.title[0].value == "Milk Tracker"
-    assert any(TAGLINE in c.value for c in at.caption)
+    assert any(LOGGED_OUT_CSS in m.value for m in at.markdown)
+    assert any(WELCOME_HTML in m.value for m in at.markdown) and "Karibu" in WELCOME_HTML  # the welcome card is fixed text
     in_ = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=20)
     in_.session_state["user"] = {"id": None, "role": "admin", "name": "Owner", "farmer_id": None, "must_change_password": False}
     monkeypatch.setattr("src.accounts.visible_farmers", lambda u: [])
