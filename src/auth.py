@@ -193,23 +193,40 @@ def _force_password_change(user):
     st.stop()
 
 
-# The sidebar lists only the pages that make sense for a role. This is tidiness, not security:
-# every page still checks the role itself (require_login(roles=...)) and the data is filtered by role.
-PAGES_BY_ROLE = {
-    "farmer": {"alerts", "dashboard", "feed_log", "budget", "farm_setup", "cows", "account", "ask_the_vet"},
-    "vet": {"alerts", "dashboard", "cows", "account", "my_day"},
-    "admin": {"alerts", "dashboard", "feed_log", "budget", "farm_setup", "cows", "account", "admin", "attendance"},
+# Each role gets its own sidebar menu. Streamlit's built-in page list is replaced because it folds
+# everything after the tenth page behind "View more", which would hide Alerts and Vaccination.
+# This is tidiness, not security: every page still checks the role itself (require_login(roles=...))
+# and the data is filtered by role.
+_COMMON = [("pages/11_alerts.py", "Alerts"), ("pages/12_vaccination.py", "Vaccination")]
+_FARM_DATA = [("pages/1_dashboard.py", "Dashboard"), ("pages/2_feed_log.py", "Feed log"), ("pages/3_budget.py", "Budget"),
+              ("pages/4_farm_setup.py", "Farm setup"), ("pages/5_cows.py", "Cows")]
+_ACCOUNT = [("pages/6_account.py", "Account")]
+MENU = {
+    "farmer": [("app.py", "Home"), ("pages/9_ask_the_vet.py", "Ask the vet")] + _COMMON + _FARM_DATA + _ACCOUNT,
+    "vet": [("app.py", "Home"), ("pages/8_my_day.py", "My day")] + _COMMON
+           + [("pages/1_dashboard.py", "Dashboard"), ("pages/5_cows.py", "Cows")] + _ACCOUNT,
+    "admin": [("app.py", "Home"), ("pages/7_admin.py", "Admin"), ("pages/10_attendance.py", "Attendance")] + _COMMON
+             + _FARM_DATA + _ACCOUNT,
 }
-ALL_PAGES = set().union(*PAGES_BY_ROLE.values())
+HIDE_BUILT_IN_NAV_CSS = '<style>[data-testid="stSidebarNav"]{display:none}</style>'
 
 
-def hide_other_pages_css(role):
-    """CSS that hides the sidebar links this role has no use for ('' when the role is unknown)."""
-    hidden = sorted(ALL_PAGES - PAGES_BY_ROLE.get(role, ALL_PAGES))
-    if not hidden:
-        return ""
-    rules = ",".join(f'[data-testid="stSidebarNav"] li:has(a[href$="/{name}"])' for name in hidden)
-    return f"<style>{rules}{{display:none}}</style>"
+def menu_for(role):
+    """[(page file, label)] for a role; empty for an unknown role."""
+    return MENU.get(role, [])
+
+
+def render_menu(role):
+    """Show this role's menu in the sidebar, and hide Streamlit's built-in list only if ours rendered."""
+    shown = 0
+    for path, label in menu_for(role):
+        try:
+            st.sidebar.page_link(path, label=label)
+            shown += 1
+        except Exception:  # a page run on its own (as in tests) has no page registry to link into
+            pass
+    if shown:
+        st.markdown(HIDE_BUILT_IN_NAV_CSS, unsafe_allow_html=True)
 
 
 def require_login(roles=None):
@@ -237,9 +254,7 @@ def require_login(roles=None):
         st.stop()
     if user.get("must_change_password"):
         _force_password_change(user)
-    css = hide_other_pages_css(user["role"])
-    if css:
-        st.markdown(css, unsafe_allow_html=True)
+    render_menu(user["role"])
     st.sidebar.caption(f"Signed in: {user['name']} ({user['role']})")
     if st.sidebar.button("Log out"):
         st.session_state.clear()

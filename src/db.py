@@ -613,13 +613,15 @@ REQUEST_SELECT = """
     SELECT q.id, q.farmer_id, q.cow_id, q.kind, q.notes, q.preferred_date, q.status, q.scheduled_for,
            q.semen_id, q.semen_price_kes, q.done_on, q.done_by_user_id, q.vet_notes, q.created_at,
            f.name AS farmer_name, f.farm_name, f.phone AS farmer_phone, r.code AS route_code,
-           r.vet_user_id AS vet_user_id, v.name AS vet_name, c.tag AS cow_tag, s.name AS semen_name
+           r.vet_user_id AS vet_user_id, v.name AS vet_name, c.tag AS cow_tag, s.name AS semen_name,
+           q.vaccination_day_id, q.animals, vd.vaccine
     FROM service_requests q
     JOIN farmers f ON f.id = q.farmer_id
     LEFT JOIN routes r ON r.id = f.route_id
     LEFT JOIN users v ON v.id = r.vet_user_id
     LEFT JOIN cows c ON c.id = q.cow_id
     LEFT JOIN vet_semen s ON s.id = q.semen_id
+    LEFT JOIN vaccination_days vd ON vd.id = q.vaccination_day_id
 """
 
 
@@ -752,3 +754,61 @@ def sms_outbox(farmer_ids=None, limit=50):
         sql += " WHERE s.farmer_id = ANY(%s)"
         args.append(list(farmer_ids))
     return _query(sql + " ORDER BY s.sent_at DESC, s.id DESC LIMIT %s", (*args, limit))
+
+
+# --- vaccination days ----------------------------------------------------------------------------
+
+VACCINATION_SELECT = """
+    SELECT d.id, d.vaccine, d.day, d.place, d.notes, d.route_id, d.cancelled, d.created_at,
+           r.code AS route_code, u.name AS author,
+           (SELECT COUNT(*) FROM service_requests q WHERE q.vaccination_day_id = d.id AND q.status IN ('scheduled', 'done')) AS bookings,
+           (SELECT COALESCE(SUM(q.animals), 0) FROM service_requests q WHERE q.vaccination_day_id = d.id AND q.status IN ('scheduled', 'done')) AS animals
+    FROM vaccination_days d LEFT JOIN routes r ON r.id = d.route_id LEFT JOIN users u ON u.id = d.created_by_user_id
+"""
+
+
+def add_vaccination_day(vaccine, day, route_id, created_by_user_id, place=None, notes=None):
+    return _query(
+        "INSERT INTO vaccination_days (vaccine, day, place, notes, route_id, created_by_user_id) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+        (vaccine, day, place, notes, route_id, created_by_user_id), one=True,
+    )["id"]
+
+
+def get_vaccination_day(day_id):
+    return _query(VACCINATION_SELECT + " WHERE d.id = %s", (day_id,), one=True)
+
+
+def list_vaccination_days(today, route_ids=None):
+    """Days not yet past and not cancelled, soonest first. route_ids=None means every route; otherwise
+    those routes plus the days for all routes."""
+    sql = VACCINATION_SELECT + " WHERE NOT d.cancelled AND d.day >= %s"
+    args = [today]
+    if route_ids is not None:
+        sql += " AND (d.route_id IS NULL OR d.route_id = ANY(%s))"
+        args.append(list(route_ids))
+    return _query(sql + " ORDER BY d.day, d.id", args)
+
+
+def cancel_vaccination_day(day_id):
+    """Cancel the day and every booking on it that is not already done."""
+    _query("UPDATE vaccination_days SET cancelled = TRUE WHERE id = %s", (day_id,))
+    _query(
+        "UPDATE service_requests SET status = 'cancelled' WHERE vaccination_day_id = %s AND status IN ('open', 'scheduled')", (day_id,)
+    )
+
+
+def add_vaccination_booking(farmer_id, day_id, day, animals, notes):
+    """Book a farm on a vaccination day as a visit already scheduled for that day."""
+    return _query(
+        """
+        INSERT INTO service_requests (farmer_id, kind, notes, preferred_date, status, scheduled_for, vaccination_day_id, animals)
+        VALUES (%s, 'vaccination', %s, %s, 'scheduled', %s, %s, %s) RETURNING id
+        """,
+        (farmer_id, notes, day, day, day_id, animals), one=True,
+    )["id"]
+
+
+def bookings_for_day(day_id):
+    return _query(
+        REQUEST_SELECT + " WHERE q.vaccination_day_id = %s AND q.status IN ('scheduled', 'done') ORDER BY f.name", (day_id,)
+    )

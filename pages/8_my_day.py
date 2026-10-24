@@ -48,7 +48,9 @@ for farm in sheet["farms"]:
         label = services.KINDS[q["kind"]] + (f" · {q['cow_tag']}" if q["cow_tag"] else "")
         with st.container(border=True):
             st.markdown(f"**{label}**" + (" · done" if q["status"] == "done" else ""))
-            if q["notes"]:
+            if q["vaccine"]:
+                st.write(f"{q['vaccine']}: {q['animals']} animal{'s' if q['animals'] != 1 else ''}")
+            elif q["notes"]:
                 st.write(q["notes"])
             if q["semen_name"]:
                 st.caption(f"Farmer chose {q['semen_name']} (KES {float(q['semen_price_kes']):,.0f})")

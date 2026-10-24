@@ -315,3 +315,24 @@ CREATE INDEX IF NOT EXISTS idx_alerts_route ON alerts (route_id, created_at);
 
 ALTER TABLE sms_log DROP CONSTRAINT IF EXISTS sms_log_kind_check;
 ALTER TABLE sms_log ADD CONSTRAINT sms_log_kind_check CHECK (kind IN ('advice', 'nudge', 'alert', 'other'));
+
+-- ---------------------------------------------------------------------------
+-- Vaccination days: posted for one route or all routes; a farmer books a number of animals, and the
+-- booking becomes a vaccination visit (a service request) on the route vet's day sheet. The unique
+-- index below means a farm cannot book the same day twice (a cancelled booking can be rebooked).
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS vaccination_days (
+    id                 SERIAL PRIMARY KEY,
+    vaccine            TEXT NOT NULL,
+    day                DATE NOT NULL,
+    place              TEXT,
+    notes              TEXT,
+    route_id           INTEGER REFERENCES routes(id) ON DELETE CASCADE,   -- NULL = all routes
+    created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    cancelled          BOOLEAN NOT NULL DEFAULT FALSE
+);
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS vaccination_day_id INTEGER REFERENCES vaccination_days(id) ON DELETE SET NULL;
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS animals INTEGER CHECK (animals IS NULL OR animals > 0);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_one_booking_per_day ON service_requests (vaccination_day_id, farmer_id)
+    WHERE vaccination_day_id IS NOT NULL AND status IN ('open', 'scheduled', 'done');
