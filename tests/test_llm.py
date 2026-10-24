@@ -23,7 +23,7 @@ class FakeClient:
 
 
 def test_a_faithful_rewording_is_used():
-    text = "Milk Tracker: your records say 0.4 kg more dairy meal a day (10% more) pays. Likely at least KES 15 a day. Keep logging."
+    text = "Maziwa Plus: your records say 0.4 kg more dairy meal a day (10% more) pays. Likely at least KES 15 a day. Keep logging."
     assert check_message(text, FACTS) == []
     out = llm.write_sms(FACTS, client=FakeClient(text))
     assert out["source"] == "haiku" and out["text"] == text and out["problems"] == []
@@ -40,14 +40,14 @@ def test_the_prompt_shows_the_template_and_sets_the_model(monkeypatch):
 
 def test_rewordings_that_change_the_facts_fall_back_to_the_template():
     bad = {
-        "a changed number": "Milk Tracker: add 0.8 kg more dairy meal a day (10% more). At least KES 15 a day.",
-        "the opposite direction": "Milk Tracker: use 0.4 kg less dairy meal a day (10% less). At least KES 15 a day.",
-        "an invented promise": "Milk Tracker: 0.4 kg more dairy meal (10%), guaranteed KES 15 a day.",
-        "a link": "Milk Tracker: 0.4 kg more dairy meal (10%), KES 15 a day. See www.example.com",
+        "a changed number": "Maziwa Plus: add 0.8 kg more dairy meal a day (10% more). At least KES 15 a day.",
+        "the opposite direction": "Maziwa Plus: use 0.4 kg less dairy meal a day (10% less). At least KES 15 a day.",
+        "an invented promise": "Maziwa Plus: 0.4 kg more dairy meal (10%), guaranteed KES 15 a day.",
+        "a link": "Maziwa Plus: 0.4 kg more dairy meal (10%), KES 15 a day. See www.example.com",
         "no app name": "Add 0.4 kg more dairy meal a day (10% more), at least KES 15 a day.",
-        "a number word": "Milk Tracker: add 0.4 kg more dairy meal a day (10% more), at least KES 15, maybe double.",
-        "an emoji": "Milk Tracker: 0.4 kg more dairy meal (10%), at least KES 15 \U0001F42E",
-        "no feed name": "Milk Tracker: add 0.4 kg more a day (10% more), at least KES 15 a day.",
+        "a number word": "Maziwa Plus: add 0.4 kg more dairy meal a day (10% more), at least KES 15, maybe double.",
+        "an emoji": "Maziwa Plus: 0.4 kg more dairy meal (10%), at least KES 15 \U0001F42E",
+        "no feed name": "Maziwa Plus: add 0.4 kg more a day (10% more), at least KES 15 a day.",
     }
     for why, text in bad.items():
         out = llm.write_sms(FACTS, client=FakeClient(text))

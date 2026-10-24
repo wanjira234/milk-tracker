@@ -15,7 +15,7 @@ import re
 from src.sms import MAX_SEGMENTS, gsm_length, sms_segments
 from src.suggestions import MAX_STEP
 
-APP_NAME = "Milk Tracker"  # working name; change here when the final name is chosen
+APP_NAME = "Maziwa Plus"
 LANGUAGES = ("en", "sw")
 
 # --- facts ------------------------------------------------------------------

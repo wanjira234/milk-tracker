@@ -137,12 +137,12 @@ def test_each_role_gets_its_own_menu_and_every_page_is_reachable_by_someone():
 
 
 def test_the_sign_in_screen_hides_the_page_menu_and_a_logged_in_page_does_not(monkeypatch):
-    from src.auth import LOGGED_OUT_CSS, WELCOME_HTML
+    from src.auth import LOGGED_OUT_CSS
 
     monkeypatch.setenv("APP_PASSWORD", "open-sesame")
     at = run("app.py")
     assert any(LOGGED_OUT_CSS in m.value for m in at.markdown)
-    assert any(WELCOME_HTML in m.value for m in at.markdown) and "Karibu" in WELCOME_HTML  # the welcome card is fixed text
+    assert any("Maziwa" in m.value and 'data-goto="About us"' in m.value for m in at.markdown)  # our own top bar
     in_ = AppTest.from_file(os.path.join(ROOT, "app.py"), default_timeout=20)
     in_.session_state["user"] = {"id": None, "role": "admin", "name": "Owner", "farmer_id": None, "must_change_password": False}
     monkeypatch.setattr("src.accounts.visible_farmers", lambda u: [])

@@ -1,6 +1,6 @@
-# Milk Tracker (Maziwa Plus)
+# Maziwa Plus (Milk Tracker)
 
-*Know what your feed is worth.* A web app and SMS service for smallholder dairy farmers in Kenya, their route vets, and the milk buyer's admin. (Working name: Milk Tracker. Entered in the FNB App of the Year hackathon as Maziwa Plus.)
+*Know what your feed is worth.* A web app and SMS service for smallholder dairy farmers in Kenya, their route vets, and the milk buyer's admin. (Earlier working name: Milk Tracker. Entered in the FNB App of the Year hackathon as Maziwa Plus.)
 
 ## The problem
 

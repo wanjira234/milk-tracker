@@ -23,7 +23,7 @@ def check(argv):
     username = os.environ.get("AT_USERNAME", "")
     print(f"AT_USERNAME = {username or '(not set)'}   AT_API_KEY set: {bool(os.environ.get('AT_API_KEY'))}   AT_SENDER_ID = {os.environ.get('AT_SENDER_ID') or '(empty)'}")
     try:
-        result = send_sms(argv[1], "Milk Tracker: test message. If you can read this, SMS works.", client=make_client())
+        result = send_sms(argv[1], "Maziwa Plus: test message. If you can read this, SMS works.", client=make_client())
     except SmsError as e:
         return f"Not sent: {e}"
     print(result)
