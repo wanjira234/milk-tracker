@@ -47,162 +47,188 @@ def icon(name, size="1.5rem"):
 PUBLIC_CSS = (
     "<style>"
     "@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Fredoka:wght@500;600&display=swap');"
-    ":root{--deep:#0A2016;--forest:#12402B;--leaf:#1F5A3A;--amber:#F2A93B;--amber2:#FFC766;--cream:#FFF8EA;--ink:#1B2B22;--mute:#4A5A50}"
+    ":root{--bg:#07140E;--mint:#8FE0A8;--amber:#F2A93B;--amber2:#FFC766;--ink:#E8F1EA;--mute:#A9C6B3}"
+    # one continuous dark page: soft green and amber glows, no blank bands
+    ".stApp{background:#07140E;background-image:radial-gradient(900px 600px at 8% 28%,rgba(42,111,70,.30),transparent 70%),"
+    "radial-gradient(800px 600px at 100% 62%,rgba(242,169,59,.10),transparent 70%),radial-gradient(900px 700px at 0% 100%,rgba(42,111,70,.22),transparent 70%);"
+    "background-attachment:fixed}"
+    "[data-testid='stMain']{overflow-x:hidden}"
     ".land{font-family:'DM Sans',system-ui,sans-serif;color:var(--ink)}"
     ".land *{box-sizing:border-box}"
     ".land h1,.land h2,.land h3{font-family:'Fredoka','DM Sans',sans-serif;font-weight:600;color:inherit;margin:0;padding:0;letter-spacing:-.01em}"
     ".land svg{flex:none}"
-    "[data-anchor]{scroll-margin-top:5.5rem}"
+    "[data-anchor]{scroll-margin-top:5rem}"
+    ".wrap{max-width:1120px;margin:0 auto;padding:0 1.2rem}"
+    ".bleed{width:100vw;margin-left:calc(50% - 50vw)}"
     # buttons
     ".land a.btn{display:inline-flex;align-items:center;gap:.5rem;border-radius:999px;padding:.9rem 1.6rem;font-weight:700;"
     "text-decoration:none;margin:.25rem .6rem .25rem 0;cursor:pointer;min-height:3rem;transition:transform .18s,box-shadow .18s,background .18s}"
     ".land a.btn:hover{transform:translateY(-2px)}"
-    ".land a.btn.main{background:linear-gradient(135deg,#FFC766,#F2A93B);color:#0A2016;box-shadow:0 10px 24px rgba(242,169,59,.38)}"
-    ".land a.btn.main:hover{box-shadow:0 14px 30px rgba(242,169,59,.5)}"
-    ".land a.btn.ghost{border:2px solid rgba(255,248,234,.7);color:#FFF8EA;background:rgba(255,248,234,.06)}"
-    ".land a.btn.ghost:hover{background:rgba(255,248,234,.16)}"
-    # top bar (fixed, frosted)
-    ".topbar{position:fixed;top:0;left:0;right:0;z-index:1000;background:rgba(255,248,234,.8);backdrop-filter:blur(16px);"
-    "-webkit-backdrop-filter:blur(16px);box-shadow:0 1px 0 rgba(15,46,32,.08),0 10px 30px rgba(15,46,32,.06)}"
+    ".land a.btn.main{background:linear-gradient(135deg,#FFC766,#F2A93B);color:#07140E;box-shadow:0 10px 26px rgba(242,169,59,.35)}"
+    ".land a.btn.main:hover{box-shadow:0 14px 34px rgba(242,169,59,.5)}"
+    ".land a.btn.ghost{border:1.5px solid rgba(232,241,234,.55);color:#E8F1EA;background:rgba(232,241,234,.06)}"
+    ".land a.btn.ghost:hover{background:rgba(232,241,234,.16)}"
+    # glass
+    ".g{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.11);border-radius:24px;backdrop-filter:blur(14px);"
+    "-webkit-backdrop-filter:blur(14px);box-shadow:0 18px 40px rgba(0,0,0,.28);transition:transform .25s,border-color .25s,box-shadow .25s}"
+    ".g:hover{transform:translateY(-5px);border-color:rgba(143,224,168,.4);box-shadow:0 24px 50px rgba(0,0,0,.4)}"
+    # top bar
+    ".topbar{position:fixed;top:0;left:0;right:0;z-index:1000;background:rgba(7,20,14,.55);backdrop-filter:blur(18px);"
+    "-webkit-backdrop-filter:blur(18px);border-bottom:1px solid rgba(255,255,255,.08)}"
     ".topin{max-width:1120px;margin:0 auto;padding:.55rem 1.2rem;display:flex;align-items:center;justify-content:space-between;gap:1rem}"
     ".topbar a{text-decoration:none;cursor:pointer}"
-    ".brand{display:flex;align-items:center;gap:.65rem;color:#0A2016}"
-    ".brand svg{width:2.7rem;height:2.7rem}"
-    ".brand .bn{font-family:'Fredoka',sans-serif;font-weight:600;font-size:1.65rem;line-height:1;color:#0A2016}"
-    ".brand .bn b{color:#D98A0B;font-weight:600}"
+    ".brand{display:flex;align-items:center;gap:.65rem}"
+    ".brand svg{width:2.6rem;height:2.6rem}"
+    ".brand .bn{font-family:'Fredoka',sans-serif;font-weight:600;font-size:1.6rem;line-height:1;color:#FFF8EA}"
+    ".brand .bn b{color:#F2A93B;font-weight:600}"
     ".nav{display:flex;gap:.2rem}"
-    ".nav a{white-space:nowrap;color:#1B2B22;font-weight:500;font-size:1.02rem;padding:.6rem 1rem;border-radius:999px}"
-    ".nav a:hover{background:rgba(31,90,58,.12);color:#0A2016}"
-    # hero
-    ".hero{position:relative;display:grid;grid-template-columns:1.1fr .9fr;gap:1rem;border-radius:32px;overflow:hidden;color:#FFF8EA;"
-    "background:radial-gradient(60% 70% at 88% 8%,rgba(242,169,59,.38),transparent 62%),radial-gradient(50% 60% at 0% 100%,rgba(75,160,110,.28),transparent 60%),"
-    "linear-gradient(135deg,#0A2016 0%,#12402B 62%,#1B5A3B 100%);box-shadow:0 30px 60px rgba(10,32,22,.35)}"
-    ".hero .txt{position:relative;z-index:2;padding:3.4rem 2.6rem;display:flex;flex-direction:column;justify-content:center}"
-    ".pill{display:inline-flex;align-items:center;gap:.5rem;align-self:flex-start;background:rgba(255,248,234,.1);border:1px solid rgba(255,248,234,.22);"
-    "border-radius:999px;padding:.4rem .9rem;font-size:.88rem;color:#FFE2A8;font-weight:500}"
-    ".pill i{width:.55rem;height:.55rem;border-radius:50%;background:var(--amber);box-shadow:0 0 0 4px rgba(242,169,59,.25)}"
-    ".hero h1{font-size:3.5rem;line-height:1.04;margin:1rem 0 1rem !important}"
+    ".nav a{white-space:nowrap;color:#DCEBE1;font-weight:500;font-size:1rem;padding:.6rem 1rem;border-radius:999px}"
+    ".nav a:hover{background:rgba(255,255,255,.1);color:#fff}"
+    # hero (full width photo that melts into the page)
+    ".hero{position:relative;min-height:min(100vh,860px);display:flex;flex-direction:column;justify-content:center;overflow:hidden;padding:11rem 0 2rem;margin-top:-8rem}"
+    ".hero .bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center 42%;z-index:0}"
+    ".hero .shade{position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,rgba(7,20,14,.82) 0%,rgba(7,20,14,.5) 42%,rgba(7,20,14,0) 85%),"
+    "linear-gradient(180deg,rgba(7,20,14,.5) 0%,rgba(7,20,14,0) 22%),radial-gradient(55% 55% at 78% 22%,rgba(242,169,59,.28),transparent 70%)}"
+    ".hero:after{content:'';position:absolute;left:0;right:0;bottom:0;height:11rem;z-index:2;background:linear-gradient(0deg,#07140E 0%,rgba(7,20,14,0) 100%)}"
+    ".hero .wrap{position:relative;z-index:3}"
+    ".hero .cols{display:grid;grid-template-columns:1.15fr .85fr;gap:2rem;align-items:center}"
+    ".pill{display:inline-flex;align-items:center;gap:.5rem;background:rgba(7,20,14,.5);border:1px solid rgba(143,224,168,.4);"
+    "border-radius:999px;padding:.4rem .9rem;font-size:.86rem;color:#BDEBCB;font-weight:500;backdrop-filter:blur(8px)}"
+    ".pill i{width:.5rem;height:.5rem;border-radius:50%;background:var(--mint);box-shadow:0 0 0 4px rgba(143,224,168,.2)}"
+    ".hero h1{font-size:3.9rem;line-height:1.03;margin:1rem 0 1rem !important;color:#fff}"
     ".hero h1 em{font-style:normal;background:linear-gradient(90deg,#FFC766,#F2A93B);-webkit-background-clip:text;background-clip:text;color:transparent}"
-    ".hero p.lead{font-size:1.2rem;line-height:1.55;color:#DDEBE1;max-width:34rem;margin:0 0 1.5rem}"
-    ".hero .stage{position:relative;padding:2rem 2rem 2rem 0;display:flex;align-items:center;justify-content:center}"
-    ".hero .arch{position:relative;width:100%;max-width:21rem;height:27rem;border-radius:999px 999px 28px 28px;overflow:hidden;"
-    "border:6px solid rgba(255,248,234,.14);box-shadow:0 30px 60px rgba(0,0,0,.45),0 0 80px rgba(242,169,59,.22)}"
-    ".hero .arch img{width:100%;height:100%;object-fit:cover;object-position:center 35%;display:block}"
-    ".chip{position:absolute;z-index:3;display:flex;align-items:center;gap:.7rem;padding:.65rem .95rem;border-radius:18px;color:#FFF8EA;"
-    "background:rgba(10,32,22,.55);border:1px solid rgba(255,248,234,.22);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);"
-    "box-shadow:0 14px 30px rgba(0,0,0,.3);animation:floaty 6s ease-in-out infinite}"
-    ".chip .ic{width:2.3rem;height:2.3rem;border-radius:12px;display:flex;align-items:center;justify-content:center;"
-    "background:linear-gradient(135deg,#FFC766,#F2A93B);color:#0A2016}"
-    ".chip b{display:block;font-size:.95rem}.chip span{font-size:.8rem;color:#CFE3D6}"
-    ".chip.c1{left:-.5rem;top:18%}.chip.c2{right:.6rem;top:44%;animation-delay:-2s}.chip.c3{left:.4rem;bottom:9%;animation-delay:-4s}"
-    ".hero video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}"
-    ".hero.vid{display:block}"
-    ".hero.vid:before{content:'';position:absolute;inset:0;z-index:1;"
-    "background:linear-gradient(90deg,rgba(10,32,22,.93) 0%,rgba(10,32,22,.72) 55%,rgba(10,32,22,.3) 100%)}"
-    ".hero.vid .txt{max-width:46rem}"
-    # trust strip
-    ".trust{display:flex;flex-wrap:wrap;gap:.6rem;justify-content:center;padding:1.3rem 0 .2rem}"
-    ".trust span{display:inline-flex;align-items:center;gap:.5rem;background:#fff;border:1px solid #EADFC4;border-radius:999px;"
-    "padding:.5rem 1rem;color:#2F4237;font-weight:500;box-shadow:0 4px 12px rgba(15,46,32,.06)}"
-    ".trust svg{color:#1F5A3A}"
+    ".hero p.lead{font-size:1.2rem;line-height:1.6;color:#DCEBE1;max-width:33rem;margin:0 0 1.6rem}"
+    ".insight{padding:1.2rem 1.3rem;max-width:25rem;margin-left:auto;background:rgba(7,20,14,.55)}"
+    ".insight .ih{display:flex;justify-content:space-between;align-items:center;font-weight:600;color:#fff;margin-bottom:.8rem}"
+    ".insight .ih{gap:.8rem}.insight .ih span{display:inline-flex;gap:.5rem;align-items:center;white-space:nowrap}"
+    ".insight .ih em{font-style:normal;font-size:.72rem;color:#FFE2A8;border:1px solid rgba(242,169,59,.5);padding:.1rem .5rem;border-radius:999px}"
+    ".irow{margin:.85rem 0}.irow .l{display:flex;justify-content:space-between;font-size:.9rem;color:#C9DDD0}.irow .l b{color:#fff}"
+    ".bar{height:.4rem;border-radius:99px;background:rgba(255,255,255,.12);margin-top:.4rem;overflow:hidden}"
+    ".bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,#8FE0A8,#4DB878)}"
+    ".bar.am i{background:linear-gradient(90deg,#FFC766,#F2A93B)}"
+    ".stats{display:grid;grid-template-columns:repeat(4,1fr);gap:.4rem;padding:1.1rem 1.2rem;margin-top:3rem}"
+    ".stat{display:flex;gap:.8rem;align-items:center;padding:.2rem .6rem}"
+    ".stat .tileic{margin:0;width:2.7rem;height:2.7rem;border-radius:14px}"
+    ".stat b{display:block;color:#fff;font-size:1.1rem}.stat span{color:var(--mute);font-size:.85rem}"
     # sections
-    ".sec{margin:4.2rem 0 1.4rem}"
-    ".eyebrow{display:inline-flex;align-items:center;gap:.5rem;color:#1F5A3A;font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:.8rem}"
+    ".sec{margin:5rem 0 1.6rem}"
+    ".eyebrow{display:inline-flex;align-items:center;gap:.5rem;color:#8FE0A8;font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:.78rem}"
     ".eyebrow:before{content:'';width:1.6rem;height:2px;background:var(--amber)}"
-    ".sec h2{font-size:2.4rem;line-height:1.12;margin:.5rem 0 .5rem !important;color:#0A2016}"
-    ".sec p.sub{color:var(--mute);font-size:1.08rem;max-width:40rem;line-height:1.55;margin:0}"
+    ".sec h2{font-size:2.5rem;line-height:1.1;margin:.5rem 0 .5rem !important;color:#fff}"
+    ".sec p.sub{color:var(--mute);font-size:1.08rem;max-width:40rem;line-height:1.6;margin:0}"
     ".grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:1.2rem}"
-    ".step{position:relative;background:#fff;border:1px solid #EADFC4;border-radius:26px;padding:1.6rem;box-shadow:0 12px 30px rgba(15,46,32,.08);"
-    "transition:transform .25s,box-shadow .25s}"
-    ".step:hover,.tile:hover,.role:hover{transform:translateY(-6px);box-shadow:0 22px 44px rgba(15,46,32,.16)}"
-    ".tileic{flex:none;width:3.2rem;height:3.2rem;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#FFF8EA;"
-    "background:linear-gradient(135deg,#2A6F46,#12402B);box-shadow:0 8px 18px rgba(31,90,58,.35);margin-bottom:1rem}"
-    ".tileic.amb{background:linear-gradient(135deg,#FFC766,#F2A93B);color:#0A2016;box-shadow:0 8px 18px rgba(242,169,59,.4)}"
-    ".step .num{position:absolute;right:1.3rem;top:.9rem;font-family:'Fredoka',sans-serif;font-size:3.4rem;font-weight:600;color:#F2E7C9;line-height:1}"
-    ".step h3,.tile h3{font-size:1.3rem;margin-bottom:.4rem !important;color:#0A2016}"
-    ".step p,.tile p{color:var(--mute);margin:0;line-height:1.55}"
+    ".step{position:relative;padding:1.7rem}"
+    ".tileic{flex:none;width:3.2rem;height:3.2rem;border-radius:16px;display:flex;align-items:center;justify-content:center;color:#8FE0A8;"
+    "background:rgba(143,224,168,.12);border:1px solid rgba(143,224,168,.35);margin-bottom:1rem}"
+    ".tileic.amb{color:#FFC766;background:rgba(242,169,59,.14);border-color:rgba(242,169,59,.45)}"
+    ".step .num{position:absolute;right:1.3rem;top:.9rem;font-family:'Fredoka',sans-serif;font-size:3.4rem;font-weight:600;color:rgba(255,255,255,.07);line-height:1}"
+    ".step h3,.tile h3{font-size:1.3rem;margin-bottom:.4rem !important;color:#fff}"
+    ".step p,.tile p{color:var(--mute);margin:0;line-height:1.6}"
+    # dashboard preview
+    ".split{display:grid;grid-template-columns:.85fr 1.15fr;gap:2.4rem;align-items:center;margin-top:5rem}"
+    ".split h2{font-size:2.3rem;line-height:1.1;color:#fff;margin:.5rem 0 .7rem !important}"
+    ".split p{color:var(--mute);line-height:1.6;font-size:1.05rem}"
+    ".checks{list-style:none;padding:0;margin:1rem 0 1.4rem}"
+    ".checks li{display:flex;gap:.7rem;align-items:center;padding:.4rem 0;color:#E8F1EA}"
+    ".checks svg{color:#8FE0A8}"
+    ".win{padding:1rem;background:rgba(7,20,14,.6);border-radius:22px}"
+    ".win .bar0{display:flex;gap:.4rem;align-items:center;padding:.2rem .4rem .8rem;color:#C9DDD0;font-size:.85rem}"
+    ".win .bar0 i{width:.6rem;height:.6rem;border-radius:50%;background:rgba(255,255,255,.2)}"
+    ".win .bar0 em{margin-left:auto;font-style:normal;font-size:.72rem;color:#FFE2A8;border:1px solid rgba(242,169,59,.5);padding:.1rem .5rem;border-radius:99px}"
+    ".tiles3{display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem}"
+    ".mini{background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.09);border-radius:16px;padding:.8rem .9rem}"
+    ".mini span{font-size:.78rem;color:var(--mute)}.mini b{display:block;font-size:1.5rem;color:#fff;font-family:'Fredoka',sans-serif}.mini b small{font-size:.8rem;color:var(--mute);font-weight:400}"
+    ".chart{display:flex;align-items:flex-end;gap:.3rem;height:6.5rem;padding:.9rem .4rem 0;margin-top:.7rem}"
+    ".chart i{flex:1;border-radius:6px 6px 2px 2px;background:linear-gradient(0deg,rgba(143,224,168,.25),#8FE0A8)}"
+    ".chart i.a{background:linear-gradient(0deg,rgba(242,169,59,.3),#F2A93B)}"
+    ".acts{margin-top:.8rem}.act{display:flex;gap:.7rem;align-items:center;padding:.55rem .3rem;border-top:1px solid rgba(255,255,255,.08);color:#DCEBE1;font-size:.92rem}"
+    ".act svg{color:#8FE0A8}.act time{margin-left:auto;color:var(--mute);font-size:.8rem}"
     # bento
-    ".bento{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:minmax(11rem,auto);gap:1.2rem}"
-    ".tile{position:relative;border-radius:26px;padding:1.5rem;background:#fff;border:1px solid #EADFC4;box-shadow:0 12px 30px rgba(15,46,32,.08);"
-    "transition:transform .25s,box-shadow .25s;overflow:hidden}"
-    ".tile.photo{grid-column:span 2;grid-row:span 2;color:#FFF8EA;border:0;display:flex;flex-direction:column;justify-content:flex-end;min-height:24rem}"
+    ".bento{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:minmax(10.5rem,auto);gap:1.2rem}"
+    ".tile{position:relative;padding:1.5rem;overflow:hidden}"
+    ".tile.photo{grid-column:span 2;grid-row:span 2;display:flex;flex-direction:column;justify-content:flex-end;min-height:24rem;padding:0}"
     ".tile.photo img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}"
-    ".tile.photo:after{content:'';position:absolute;inset:0;background:linear-gradient(0deg,rgba(10,32,22,.92) 0%,rgba(10,32,22,.35) 55%,rgba(10,32,22,0) 100%)}"
-    ".tile.photo>div{position:relative;z-index:2}"
-    ".tile.photo h3,.tile.dark h3{color:#FFF8EA}.tile.photo p,.tile.dark p{color:#DDEBE1}"
-    ".tile.dark{grid-column:span 2;background:linear-gradient(135deg,#12402B,#0A2016);border:0;color:#FFF8EA}"
-    ".tile.warm{background:linear-gradient(135deg,#FFF1D2,#FFE2A8);border-color:#F2D391}"
+    ".tile.photo:after{content:'';position:absolute;inset:0;background:linear-gradient(0deg,rgba(7,20,14,.95) 0%,rgba(7,20,14,.4) 55%,rgba(7,20,14,.05) 100%)}"
+    ".tile.photo>div{position:relative;z-index:2;padding:1.5rem}"
+    ".tile.wideg{grid-column:span 2;background:linear-gradient(135deg,rgba(143,224,168,.14),rgba(255,255,255,.04))}"
+    ".tile.warm{background:linear-gradient(135deg,rgba(242,169,59,.2),rgba(255,255,255,.04))}"
     ".tile.wide{grid-column:span 2}"
-    # roles
-    ".role{position:relative;border-radius:26px;overflow:hidden;min-height:20rem;display:flex;flex-direction:column;justify-content:flex-end;"
-    "color:#FFF8EA;box-shadow:0 12px 30px rgba(15,46,32,.14);transition:transform .25s,box-shadow .25s}"
+    # roles and sdg
+    ".role{position:relative;min-height:21rem;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;padding:0}"
     ".role img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}"
-    ".role:after{content:'';position:absolute;inset:0;background:linear-gradient(0deg,rgba(10,32,22,.94) 0%,rgba(10,32,22,.3) 60%,rgba(10,32,22,0) 100%)}"
+    ".role:after{content:'';position:absolute;inset:0;background:linear-gradient(0deg,rgba(7,20,14,.95) 0%,rgba(7,20,14,.3) 60%,rgba(7,20,14,0) 100%)}"
     ".role .rb{position:relative;z-index:2;padding:1.4rem}"
-    ".role h3{font-size:1.5rem;margin-bottom:.35rem !important}.role p{margin:0;color:#DDEBE1;line-height:1.5}"
-    # stat band
-    ".band{position:relative;display:grid;grid-template-columns:1.2fr .8fr;border-radius:32px;overflow:hidden;color:#FFF8EA;margin:4rem 0 0;"
-    "background:radial-gradient(60% 90% at 100% 0%,rgba(242,169,59,.3),transparent 60%),linear-gradient(135deg,#0A2016,#12402B);box-shadow:0 26px 50px rgba(10,32,22,.3)}"
-    ".band .bt{padding:2.6rem 2.6rem}"
+    ".role h3{font-size:1.5rem;margin-bottom:.35rem !important;color:#fff}.role p{margin:0;color:#DCEBE1;line-height:1.5}"
+    ".sdg{padding:1.5rem}"
+    ".sdgn{display:flex;align-items:center;gap:.8rem;margin-bottom:.9rem}"
+    ".sdgn b{width:3.2rem;height:3.2rem;border-radius:14px;display:flex;align-items:center;justify-content:center;color:#fff;font-family:'Fredoka',sans-serif;font-size:1.6rem}"
+    ".sdgn span{font-weight:700;color:#fff;line-height:1.2}"
+    ".sdg p{color:var(--mute);line-height:1.6;margin:0}.sdg em{display:block;margin-top:.6rem;font-style:normal;color:#FFE2A8;font-size:.85rem}"
+    ".fine{color:#7E9A89;font-size:.82rem;margin-top:1.4rem}"
+    # band, about
+    ".band{position:relative;display:grid;grid-template-columns:1.2fr .8fr;overflow:hidden;margin-top:5rem;padding:0}"
+    ".band .bt{padding:2.6rem}"
     ".band .bigstat{font-family:'Fredoka',sans-serif;font-size:5.4rem;font-weight:600;line-height:1;background:linear-gradient(90deg,#FFC766,#F2A93B);"
     "-webkit-background-clip:text;background-clip:text;color:transparent}"
-    ".band p{color:#DDEBE1;font-size:1.15rem;line-height:1.55;margin:.7rem 0 0}.band .src{color:#9FBFAB;font-size:.85rem}"
+    ".band p{color:#DCEBE1;font-size:1.15rem;line-height:1.55;margin:.7rem 0 0}.band .src{color:#8FAE9B;font-size:.85rem}"
     ".band .im{position:relative;min-height:17rem}.band .im img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}"
-    ".band .im:before{content:'';position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,#12402B 0%,rgba(18,64,43,0) 40%)}"
-    # about
+    ".band .im:before{content:'';position:absolute;inset:0;z-index:1;background:linear-gradient(90deg,#0c241a 0%,rgba(12,36,26,0) 45%)}"
     ".about{display:grid;grid-template-columns:1.1fr .9fr;gap:2.4rem;align-items:center}"
-    ".about .ph{position:relative}.about .ph img{width:100%;height:30rem;object-fit:cover;border-radius:30px;display:block;box-shadow:0 26px 50px rgba(10,32,22,.25)}"
-    ".about .ph:before{content:'';position:absolute;inset:1.2rem -1rem -1rem 1.2rem;border-radius:30px;border:2px solid var(--amber);z-index:-1}"
-    ".about p{color:var(--mute);line-height:1.65;font-size:1.05rem}"
-    ".prom{display:flex;gap:.9rem;align-items:flex-start;margin:1rem 0}.prom .tileic{margin:0;width:2.8rem;height:2.8rem;border-radius:14px}"
-    ".prom b{display:block;color:#0A2016;font-size:1.05rem}.prom span{color:var(--mute);line-height:1.5}"
-    ".datagrid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-top:1.6rem}"
+    ".about .ph{position:relative}.about .ph img{width:100%;height:30rem;object-fit:cover;border-radius:28px;display:block;box-shadow:0 26px 50px rgba(0,0,0,.5)}"
+    ".about .ph:before{content:'';position:absolute;inset:1.2rem -1rem -1rem 1.2rem;border-radius:28px;border:2px solid rgba(242,169,59,.6)}"
+    ".about p{color:var(--mute);line-height:1.7;font-size:1.05rem}"
+    ".prom{display:flex;gap:.9rem;align-items:flex-start;margin:1.1rem 0}.prom .tileic{margin:0;width:2.8rem;height:2.8rem;border-radius:14px}"
+    ".prom b{display:block;color:#fff;font-size:1.05rem}.prom span{color:var(--mute);line-height:1.55}"
+    ".datagrid{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin-top:1.4rem}"
     ".datagrid .tile{padding:1.2rem}.datagrid h3{font-size:1.05rem}.datagrid p{font-size:.95rem}"
     # contact
-    ".cinfo{background:radial-gradient(70% 70% at 100% 0%,rgba(242,169,59,.28),transparent 60%),linear-gradient(135deg,#0A2016,#12402B);color:#FFF8EA;"
-    "border-radius:28px;padding:2rem;height:100%;box-shadow:0 20px 44px rgba(10,32,22,.28)}"
-    ".cinfo h3{font-size:1.6rem;margin-bottom:.5rem !important}.cinfo p{color:#DDEBE1;line-height:1.55}"
-    ".crow{display:flex;align-items:center;gap:.9rem;margin:1rem 0;color:#FFF8EA}"
-    ".crow .tileic{margin:0;width:2.7rem;height:2.7rem;border-radius:14px}"
-    # CTA + footer
-    ".cta{position:relative;overflow:hidden;background:radial-gradient(50% 90% at 50% 0%,rgba(242,169,59,.3),transparent 65%),linear-gradient(135deg,#0A2016,#1F5A3A);"
-    "color:#FFF8EA;border-radius:32px;padding:3.2rem 2rem;text-align:center;margin:4rem 0 0;box-shadow:0 26px 50px rgba(10,32,22,.3)}"
-    ".cta h2{font-size:2.6rem;margin-bottom:.5rem !important}.cta p{color:#DDEBE1;font-size:1.12rem;margin:0 0 1.4rem}"
-    ".foot2{background:#0A2016;color:#E8F1EA;border-radius:32px 32px 0 0;padding:2.6rem 2.6rem 1.3rem;margin:2.5rem 0 0}"
+    ".cinfo{padding:2rem;height:100%;background:linear-gradient(135deg,rgba(143,224,168,.14),rgba(242,169,59,.08))}"
+    ".cinfo h3{font-size:1.6rem;margin-bottom:.5rem !important;color:#fff}.cinfo p{color:#DCEBE1;line-height:1.6}"
+    ".crow{display:flex;align-items:center;gap:.9rem;margin:1rem 0;color:#fff}.crow .tileic{margin:0;width:2.7rem;height:2.7rem;border-radius:14px}"
+    # CTA and footer
+    ".cta{position:relative;overflow:hidden;margin-top:5rem;padding:4rem 2rem;text-align:center;border-radius:30px;border:1px solid rgba(255,255,255,.12)}"
+    ".cta img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0}"
+    ".cta:before{content:'';position:absolute;inset:0;z-index:1;background:linear-gradient(135deg,rgba(7,20,14,.9),rgba(18,64,43,.72))}"
+    ".cta>div{position:relative;z-index:2}"
+    ".cta h2{font-size:2.6rem;margin-bottom:.5rem !important;color:#fff}.cta p{color:#DCEBE1;font-size:1.12rem;margin:0 0 1.4rem}"
+    ".foot2{margin-top:4rem;margin-bottom:-1.2rem;background:#050E0A;border-top:1px solid rgba(255,255,255,.08);padding:3rem 0 1.4rem}"
     ".fgrid{display:grid;grid-template-columns:1.6fr 1fr 1fr 1.2fr;gap:2rem}"
     ".foot2 h4{font-family:'Fredoka',sans-serif;color:#F2A93B;font-weight:600;font-size:1.05rem;margin:0 0 .7rem;letter-spacing:.04em}"
-    ".foot2 a{display:block;color:#E8F1EA;text-decoration:none;padding:.3rem 0;cursor:pointer}"
-    ".foot2 a.brand{display:flex;padding:0}"
-    ".foot2 a:hover{color:#F2A93B;text-decoration:underline}"
-    ".foot2 p{margin:.4rem 0;color:#A9C6B3;line-height:1.5}"
-    ".foot2 .brand .bn{color:#FFF8EA}.foot2 .brand .bn b{color:#F2A93B}"
-    ".fbot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.4rem 1.5rem;border-top:1px solid rgba(255,248,234,.16);"
-    "margin-top:1.6rem;padding-top:1rem;font-size:.88rem;color:#A9C6B3}"
-    ".ptitle{padding:1rem 0 .4rem}.ptitle h2{font-size:2rem;color:#0A2016}.ptitle p{color:var(--mute);margin:.3rem 0 0}"
-    # Streamlit parts: FAQ and the contact form
-    "[data-testid='stExpander']{border:1px solid #EADFC4 !important;border-radius:18px !important;background:#fff;box-shadow:0 6px 16px rgba(15,46,32,.06);"
+    ".foot2 a{display:block;color:#DCEBE1;text-decoration:none;padding:.3rem 0;cursor:pointer}"
+    ".foot2 a.brand{display:flex;padding:0}.foot2 a:hover{color:#F2A93B}"
+    ".foot2 p{margin:.4rem 0;color:#8FAE9B;line-height:1.5}"
+    ".fbot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.4rem 1.5rem;border-top:1px solid rgba(255,255,255,.1);margin-top:1.6rem;padding-top:1rem;font-size:.88rem;color:#8FAE9B}"
+    ".ptitle{padding:6.2rem 0 .6rem;text-align:center}.ptitle h2{font-size:2.3rem;color:#fff}.ptitle p{color:var(--mute);margin:.4rem 0 0}"
+    # Streamlit parts (log in, sign up, FAQ, contact form)
+    "[data-testid='stVerticalBlockBorderWrapper']{background:#FFF8EA;border-radius:26px !important;border:0 !important;padding:1.2rem !important;box-shadow:0 24px 50px rgba(0,0,0,.45)}"
+    "[data-testid='stExpander']{border:1px solid rgba(255,255,255,.12) !important;border-radius:18px !important;background:rgba(255,255,255,.05);"
     "margin-bottom:.6rem;overflow:hidden}"
-    "[data-testid='stExpander'] summary{font-weight:600;padding:.8rem 1rem;font-size:1.05rem}"
-    "[data-testid='stForm']{background:#fff;border:1px solid #EADFC4 !important;border-radius:28px !important;padding:1.6rem !important;"
-    "box-shadow:0 20px 44px rgba(15,46,32,.12)}"
-    # motion: rise as sections scroll in (browsers without scroll timelines just show everything)
-    "@keyframes floaty{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}"
+    "[data-testid='stExpander'] summary{padding:.8rem 1rem}[data-testid='stExpander'] summary p{font-size:1.05rem}[data-testid='stExpander']{margin-left:1.2rem;margin-right:1.2rem}"
+    "[data-testid='stHorizontalBlock']{padding:0 1.2rem}"
+    "[data-testid='stExpander'] summary,[data-testid='stExpander'] summary *,[data-testid='stExpander'] p{color:#E8F1EA !important}"
+    "[data-testid='stExpander'] summary{font-weight:600;font-size:1.05rem}"
+    "[data-testid='stForm']{background:#FFF8EA;border:0 !important;border-radius:26px !important;padding:1.6rem !important;box-shadow:0 24px 50px rgba(0,0,0,.45)}"
+    "[role='tab']{color:#C9DDD0 !important}[role='tab'][aria-selected='true']{color:#8FE0A8 !important}"
+    "[data-testid='stWidgetLabel'] p,[data-testid='stRadio'] label p,[data-testid='stCaptionContainer'],[data-testid='stMarkdownContainer'] p,[data-testid='stMarkdownContainer'] li{color:#E8F1EA}"
+    "[data-testid='stForm'] [data-testid='stMarkdownContainer'] p,[data-testid='stAlert'] p,[data-testid='stAlert'] li{color:#1B2B22}"
+    "[data-testid='stForm'] [data-testid='stWidgetLabel'] p,[data-testid='stForm'] label p,[data-testid='stForm'] [data-testid='stCaptionContainer']{color:#1B2B22}"
+    "[data-testid='stForm'] button p,[data-testid='stFormSubmitButton'] button p{color:#fff !important}"
+    # motion
     "@keyframes rise{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:none}}"
-    "@supports (animation-timeline:view()){.step,.tile,.role,.about,.cinfo,.band,.cta{animation:rise both;animation-timeline:view();animation-range:entry 0% entry 35%}}"
+    "@supports (animation-timeline:view()){.step,.tile,.role,.about,.cinfo,.band,.cta,.sdg,.win,.stats{animation:rise both;animation-timeline:view();animation-range:entry 0% entry 35%}}"
     "@media (max-width:900px){.bento{grid-template-columns:1fr 1fr}.tile.photo{grid-column:span 2;grid-row:span 1;min-height:18rem}"
-    ".tile.dark,.tile.wide{grid-column:span 2}.datagrid{grid-template-columns:1fr 1fr}}"
+    ".tile.wideg,.tile.wide{grid-column:span 2}.datagrid{grid-template-columns:1fr 1fr}.split{grid-template-columns:1fr}}"
     "@media (max-width:760px){"
     ".topin{padding:.45rem .8rem}.nav a{padding:.5rem .55rem;font-size:.92rem}.brand .bn{display:none}.brand svg{width:2.4rem;height:2.4rem}"
-    ".hero,.band,.about{grid-template-columns:1fr}"
-    ".hero .txt{padding:2.2rem 1.4rem 1rem}.hero h1{font-size:2.5rem}"
-    ".hero .stage{padding:1rem 1rem 2rem}.hero .arch{height:20rem;max-width:17rem}.chip.c1{left:0}.chip.c2{right:0}"
-    ".hero video{display:none}.hero.vid:before{background:#0A2016}"
-    ".grid3,.bento,.datagrid{grid-template-columns:1fr}.tile.photo,.tile.dark,.tile.wide{grid-column:auto}"
-    ".sec{margin:3rem 0 1.1rem}.sec h2{font-size:1.8rem}.cta h2{font-size:1.8rem}"
-    ".band .bt{padding:1.8rem 1.4rem}.band .bigstat{font-size:4rem}.band .im{min-height:12rem}"
-    ".about .ph img{height:20rem}.fgrid{grid-template-columns:1fr 1fr}.foot2{padding:1.8rem 1.3rem 1rem}}"
-    "@media (prefers-reduced-motion:reduce){.chip{animation:none}.hero video{display:none}"
-    ".step,.tile,.role,.about,.cinfo,.band,.cta{animation:none !important}}"
+    ".hero{padding-top:9.5rem}.hero .cols{grid-template-columns:1fr}.hero h1{font-size:2.6rem}.insight{margin:1rem 0 0;max-width:none}"
+    ".hero .shade{background:linear-gradient(180deg,rgba(7,20,14,.7) 0%,rgba(7,20,14,.8) 100%)}.hero video{display:none}"
+    ".stats{grid-template-columns:1fr 1fr;margin-top:1.6rem}"
+    ".grid3,.bento,.datagrid{grid-template-columns:1fr}.tile.photo,.tile.wideg,.tile.wide{grid-column:auto}"
+    ".sec{margin:3.4rem 0 1.2rem}.sec h2,.split h2{font-size:1.9rem}.cta h2{font-size:1.9rem}"
+    ".band{grid-template-columns:1fr}.band .bt{padding:1.8rem 1.4rem}.band .bigstat{font-size:4rem}.band .im{min-height:12rem}"
+    ".about{grid-template-columns:1fr}.about .ph img{height:20rem}.tiles3{grid-template-columns:1fr 1fr 1fr}"
+    ".fgrid{grid-template-columns:1fr 1fr}}"
+    "@media (prefers-reduced-motion:reduce){.hero video{display:none}.step,.tile,.role,.about,.cinfo,.band,.cta,.sdg,.win,.stats{animation:none !important}}"
     "</style>"
 )
 
@@ -264,14 +290,14 @@ def render_footer():
     email, phone = os.environ.get("CONTACT_EMAIL", "").strip(), os.environ.get("CONTACT_PHONE", "").strip()
     lines = "".join(f"<p>{html.escape(x)}</p>" for x in (email, phone) if x) or "<p>Send us a message and we will reply.</p>"
     st.markdown(
-        f'<div class="land"><footer class="foot2"><div class="fgrid"><div>{_brand()}'
+        f'<div class="land"><footer class="bleed foot2"><div class="wrap"><div class="fgrid"><div>{_brand()}'
         "<p>Know what your feed is worth.</p><p>Karibu. A tool for farmers, vets and milk buyers.</p></div>"
         '<div><h4>Explore</h4><a href="#" data-goto="Home">Home</a>' + _nav_link("How it works", "how")
         + _nav_link("About us", "about") + "</div>"
         '<div><h4>Get started</h4><a href="#" data-goto="Sign up">Create an account</a><a href="#" data-goto="Log in">Log in</a></div>'
         f"<div><h4>Contact</h4>{lines}" + _nav_link("Write to us", "contact") + "</div></div>"
         '<div class="fbot"><span>© 2026 HustleWindow</span>'
-        "<span>Built for the FNB App of the Year hackathon. Demo data is simulated.</span></div></footer></div>",
+        "<span>Built for the FNB App of the Year hackathon. Demo data is simulated.</span></div></div></footer></div>",
         unsafe_allow_html=True,
     )
 
@@ -280,34 +306,44 @@ def page_title(title, text):
     st.markdown(f'<div class="land"><div class="ptitle"><h2>{title}</h2><p>{text}</p></div></div>', unsafe_allow_html=True)
 
 
-def _chip(cls, ic, title, sub):
-    return f'<div class="chip {cls}"><div class="ic">{icon(ic, "1.25rem")}</div><div><b>{title}</b><span>{sub}</span></div></div>'
-
-
 def _hero():
     has_video = os.path.exists(HERO_VIDEO)
+    if has_video:
+        bg = (
+            f'<video class="bg" autoplay muted loop playsinline preload="metadata" poster="{IMG}hero-farm.jpg" aria-hidden="true">'
+            '<source src="app/static/hero.mp4" type="video/mp4"></video>'
+        )
+    else:
+        bg = f'<img class="bg" src="{IMG}hero-farm.jpg" alt="Cows grazing in a misty pasture at sunrise, with a farmhouse behind">'
     txt = (
-        '<div class="txt"><div class="pill"><i></i>Karibu · built for Kenyan dairy farmers</div>'
+        '<div><div class="pill"><i></i>Karibu · built for Kenyan dairy farmers</div>'
         "<h1>Know what your milk <em>really earns</em>.</h1>"
         '<p class="lead">Feed is the biggest cost on a dairy farm. Record your day, see what each feed pays back, '
         "and reach your vet and your milk route from one phone.</p>"
         f'<div><a class="btn main" href="#" data-goto="Sign up">Get started {icon("check", "1.2rem")}</a>'
         '<a class="btn ghost" href="#" data-goto="Log in">I have an account</a></div></div>'
     )
-    if has_video:
-        media = (
-            f'<video autoplay muted loop playsinline preload="metadata" poster="{IMG}hero-cow.jpg" aria-hidden="true">'
-            '<source src="app/static/hero.mp4" type="video/mp4"></video>'
-        )
-        return f'<div class="hero vid">{media}{txt}</div>'
-    stage = (
-        f'<div class="stage"><div class="arch"><img src="{IMG}hero-cow.jpg" alt="A curious brown cow looking into the camera"></div>'
-        + _chip("c1", "trend", "Feed advice", "after 14 days of records")
-        + _chip("c2", "cross", "Vet booked", "your route vet, one tap")
-        + _chip("c3", "bell", "Vaccination day", "reminder set")
-        + "</div>"
+    insight = (
+        f'<div class="g insight"><div class="ih"><span>{icon("leaf", "1.2rem")} Farm snapshot</span><em>Example data</em></div>'
+        '<div class="irow"><div class="l"><span>Milk today</span><b>38 L</b></div><div class="bar"><i style="width:76%"></i></div></div>'
+        '<div class="irow"><div class="l"><span>Feed cost per litre</span><b>KES 17</b></div><div class="bar am"><i style="width:40%"></i></div></div>'
+        '<div class="irow"><div class="l"><span>Left after feed, per litre</span><b>KES 26</b></div><div class="bar"><i style="width:62%"></i></div></div>'
+        "</div>"
     )
-    return f'<div class="hero">{txt}{stage}</div>'
+    stats = [
+        ("users", "3 views", "farmer, vet, milk buyer"),
+        ("calendar", "14 days", "of records before advice"),
+        ("phone", "Web + SMS", "reaches any phone"),
+        ("trash", "Delete anytime", "your data, your call"),
+    ]
+    strip = "".join(
+        f'<div class="stat"><div class="tileic{" amb" if i % 2 else ""}">{icon(ic, "1.3rem")}</div><div><b>{t}</b><span>{x}</span></div></div>'
+        for i, (ic, t, x) in enumerate(stats)
+    )
+    return (
+        f'<section class="bleed hero">{bg}<div class="shade"></div><div class="wrap"><div class="cols">{txt}{insight}</div>'
+        f'<div class="g stats">{strip}</div></div></section>'
+    )
 
 
 def _head(eyebrow, title, sub="", anchor=None):
@@ -323,18 +359,45 @@ def _steps():
         ("bell", "Hear what matters", "Get an outbreak alert, or one short SMS about one feed, only when the records are clear."),
     ]
     return "".join(
-        f'<div class="step"><div class="num">{i}</div><div class="tileic{" amb" if i == 2 else ""}">{icon(ic)}</div><h3>{t}</h3><p>{p}</p></div>'
+        f'<div class="g step"><div class="num">{i}</div><div class="tileic{" amb" if i == 2 else ""}">{icon(ic)}</div><h3>{t}</h3><p>{p}</p></div>'
         for i, (ic, t, p) in enumerate(items, 1)
     )
 
 
+def _dash():
+    bars = [40, 55, 48, 62, 58, 70, 66, 74, 69, 78, 72, 80, 76, 84]
+    chart = "".join(f'<i class="{"a" if i == len(bars) - 1 else ""}" style="height:{h}%"></i>' for i, h in enumerate(bars))
+    acts = [
+        ("cross", "Vet visit requested", "Thu"),
+        ("notebook", "Dairy meal, 50 kg bag logged", "Today"),
+        ("calendar", "Vaccination day booked", "Mon"),
+    ]
+    acts_html = "".join(f'<div class="act">{icon(ic, "1.1rem")}<span>{t}</span><time>{w}</time></div>' for ic, t, w in acts)
+    left = (
+        '<div><div class="eyebrow">Your farm at a glance</div><h2>Records in, decisions out</h2>'
+        "<p>Everything you log lands on one clear page: the milk, the feed, the vet and the days that matter.</p>"
+        '<ul class="checks">'
+        + "".join(f"<li>{icon('check', '1.2rem')}{t}</li>" for t in (
+            "Milk by day, with a chart that moves", "Feed in buckets, bags or bales", "Vet requests and visit status", "Vaccination days for your route"))
+        + f'</ul><a class="btn main" href="#" data-goto="Sign up">Create my account {icon("check", "1.2rem")}</a></div>'
+    )
+    right = (
+        '<div class="g win"><div class="bar0"><i></i><i></i><i></i><span style="margin-left:.4rem">Farm overview</span><em>Example data</em></div>'
+        '<div class="tiles3"><div class="mini"><span>Milk today</span><b>38 <small>L</small></b></div>'
+        '<div class="mini"><span>Feed cost</span><b><small>KES</small> 646</b></div>'
+        '<div class="mini"><span>Left after feed</span><b><small>KES</small> 988</b></div></div>'
+        f'<div class="chart">{chart}</div><div class="acts">{acts_html}</div></div>'
+    )
+    return f'<div class="split">{left}{right}</div>'
+
+
 def _tile(ic, title, text, cls="", amb=False):
-    return f'<div class="tile {cls}"><div class="tileic{" amb" if amb else ""}">{icon(ic)}</div><h3>{title}</h3><p>{text}</p></div>'
+    return f'<div class="g tile {cls}"><div class="tileic{" amb" if amb else ""}">{icon(ic)}</div><h3>{title}</h3><p>{text}</p></div>'
 
 
 def _bento():
     photo = (
-        f'<div class="tile photo"><img src="{IMG}farmer-feeding.jpg" alt="A farmer hand-feeding fresh grass to a brown cow" loading="lazy">'
+        f'<div class="g tile photo"><img src="{IMG}farmer-feeding.jpg" alt="A farmer hand-feeding fresh grass to a brown cow" loading="lazy">'
         f'<div><div class="tileic amb">{icon("drop")}</div><h3>Log your day in the buckets you already use</h3>'
         "<p>Feeding a truckload of napier, shredded and mixed with hay? Record it as 20-litre buckets, 50 kg bags or bales. "
         "Weigh one full bucket once and the app does the sums. Bought or grown on your own land, both count.</p></div></div>"
@@ -343,11 +406,11 @@ def _bento():
         '<div class="bento">' + photo
         + _tile("trend", "Advice that shows its working",
                 "After 14 full days of records, the app compares what each feed costs with what the cows gave back. "
-                "If the evidence is thin it says so, and does not guess.", "dark", amb=True)
+                "If the evidence is thin it says so, and does not guess.", "wideg")
         + _tile("cross", "Ask your vet", "Request a visit and pick AI semen from your route vet's own price list.")
         + _tile("calendar", "Vaccination days", "Book ahead and get a reminder, with one list for the whole route.", "warm", amb=True)
         + _tile("shield", "Private by default", "A farmer sees only their own farm. A vet sees only the farms on their route.")
-        + _tile("coins", "Know your margin", "Costs in shillings per litre, and what is left after feed and semen.")
+        + _tile("coins", "Know your margin", "Costs in shillings per litre, and what is left after feed and semen.", amb=True)
         + _tile("phone", "Made for a phone", "Big buttons, short pages, and a get-started list that tells you the next step.", "wide")
         + "</div>"
     )
@@ -363,8 +426,30 @@ def _roles():
          "Set up routes, send alerts to the farms that need them, and see which visits were attended."),
     ]
     return "".join(
-        f'<div class="role"><img src="{IMG}{f}" alt="{a}" loading="lazy"><div class="rb"><h3>{t}</h3><p>{p}</p></div></div>'
+        f'<div class="g role"><img src="{IMG}{f}" alt="{a}" loading="lazy"><div class="rb"><h3>{t}</h3><p>{p}</p></div></div>'
         for f, a, t, p in items
+    )
+
+
+def _sdgs():
+    items = [
+        ("2", "#DDA63A", "Zero Hunger", "Target 2.3: raise the productivity and incomes of small-scale food producers.",
+         "We help smallholder dairy farms feed their cows by evidence, not by feel."),
+        ("8", "#A21942", "Decent Work and Economic Growth", "Target 8.3: support small enterprises and productive activity.",
+         "A farm's margin becomes visible, and the vet and the milk route run on facts."),
+        ("9", "#FD6925", "Industry, Innovation and Infrastructure", "Target 9.c: widen access to information and communication technology.",
+         "It works on the web and by plain SMS, so it reaches phones of every kind."),
+    ]
+    cards = "".join(
+        f'<div class="g sdg"><div class="sdgn"><b style="background:{c}">{n}</b><span>{t}</span></div><p>{x}</p><em>{y}</em></div>'
+        for n, c, t, x, y in items
+    )
+    return (
+        '<div class="land"><div class="wrap">'
+        + _head("Our goals", "Built with the Sustainable Development Goals in mind",
+                "These are the goals we aim to contribute to. They are our aims, not measured results yet: the pilot is how we will find out.")
+        + f'<div class="grid3">{cards}</div>'
+        '<p class="fine">Goal names and numbers belong to the United Nations. This page is not endorsed by the UN.</p></div></div>'
     )
 
 
@@ -388,14 +473,14 @@ def _about_html():
     ]
     data_html = "".join(_tile(ic, t, x, amb=(i % 2 == 1)) for i, (ic, t, x) in enumerate(data))
     return (
-        '<div class="land">' + _head("About us", f"Why we built {APP_NAME}", anchor="about")
+        '<div class="land"><div class="wrap">' + _head("About us", f"Why we built {APP_NAME}", anchor="about")
         + '<div class="about"><div>'
         "<p>We are HustleWindow, a team building tools for smallholder dairy farmers in Kenya. Most farms buy feed by feel and "
         "arrange vets and vaccination by phone call. We wanted one place where the farmer, the route vet and the milk buyer "
         f"see the same facts.</p>{team_html}{prom_html}</div>"
         f'<div class="ph"><img src="{IMG}trough.jpg" alt="Cows feeding at a wooden trough at sunset" loading="lazy"></div></div>'
-        '<div class="sec" style="margin-top:2.6rem"><h2 style="font-size:1.7rem">Your data</h2></div>'
-        f'<div class="datagrid">{data_html}</div></div>'
+        '<div class="sec" style="margin:2.6rem 0 0"><h2 style="font-size:1.7rem">Your data</h2></div>'
+        f'<div class="datagrid">{data_html}</div></div></div>'
     )
 
 
@@ -421,7 +506,7 @@ def _contact_info_html():
         rows += f'<div class="crow"><div class="tileic amb">{icon("tel")}</div><div>{html.escape(phone)}</div></div>'
     rows += f'<div class="crow"><div class="tileic amb">{icon("pin")}</div><div>Nairobi, Kenya</div></div>'
     return (
-        '<div class="land"><div class="cinfo"><h3>Talk to us</h3>'
+        '<div class="land"><div class="g cinfo"><h3>Talk to us</h3>'
         "<p>Questions, a problem, or want to bring your milk route on? Write to us and we will reply to the contact you give.</p>"
         f"{rows}</div></div>"
     )
@@ -447,41 +532,40 @@ def _contact_form():
 
 
 def render_home():
-    """The whole public page, top to bottom."""
+    """The whole public page, top to bottom, on one dark background."""
+    st.markdown('<div class="land">' + _hero() + "</div>", unsafe_allow_html=True)
     st.markdown(
-        '<div class="land">' + _hero()
-        + '<div class="trust"><span>' + icon("phone", "1.1rem") + "Works on any phone</span><span>" + icon("shield", "1.1rem")
-        + "Your records stay yours</span><span>" + icon("trash", "1.1rem") + "Delete your account any time</span><span>"
-        + icon("trend", "1.1rem") + "Advice shows its working</span></div>"
-        + _head("How it works", "Three steps, a few minutes a day", anchor="how")
-        + f'<div class="grid3">{_steps()}</div>'
+        '<div class="land"><div class="wrap">' + _head("How it works", "Three steps, a few minutes a day", anchor="how")
+        + f'<div class="grid3">{_steps()}</div>' + _dash()
         + _head("What you get", "Everything a dairy farm runs on, in one place", "Built around the way smallholders really feed and farm.")
         + _bento()
-        + '<div class="band"><div class="bt"><div class="bigstat">43–58%</div>'
+        + '<div class="g band"><div class="bt"><div class="bigstat">43–58%</div>'
         "<p>of what it costs to make a litre of milk is feed, and most farms buy it by feel. "
         "We help each farm see which feed pays on its own cows.</p>"
         '<p class="src">Source: Tegemeo Institute and Kenya Dairy Board cost study (2014 data).</p></div>'
         f'<div class="im"><img src="{IMG}bottling.jpg" alt="Milk being filled into clear bottles" loading="lazy"></div></div>'
         + _head("Who it is for", "Built for every person on the route")
-        + f'<div class="grid3">{_roles()}</div></div>',
+        + f'<div class="grid3">{_roles()}</div></div></div>',
         unsafe_allow_html=True,
     )
+    st.markdown(_sdgs(), unsafe_allow_html=True)
     st.markdown(_about_html(), unsafe_allow_html=True)
-    st.markdown('<div class="land">' + _head("Questions", "Before you sign up") + "</div>", unsafe_allow_html=True)
+    st.markdown('<div class="land"><div class="wrap">' + _head("Questions", "Before you sign up") + "</div></div>", unsafe_allow_html=True)
     for q, a in FAQ:
         with st.expander(q):
             st.write(a)
-    st.markdown('<div class="land">' + _head("Contact us", "We would love to hear from you", anchor="contact") + "</div>", unsafe_allow_html=True)
+    st.markdown('<div class="land"><div class="wrap">' + _head("Contact us", "We would love to hear from you", anchor="contact") + "</div></div>", unsafe_allow_html=True)
     left, right = st.columns([5, 6], gap="large")
     with left:
         st.markdown(_contact_info_html(), unsafe_allow_html=True)
     with right:
         _contact_form()
     st.markdown(
-        '<div class="land"><div class="cta"><h2>Ready to see what your feed is worth?</h2>'
+        '<div class="land"><div class="wrap"><div class="cta"><img src="' + IMG + 'farmer-feeding.jpg" alt="" loading="lazy"><div>'
+        "<h2>Ready to see what your feed is worth?</h2>"
         "<p>Sign up takes a minute. Farmers, vets and milk-buyer admins each get their own view.</p>"
         f'<a class="btn main" href="#" data-goto="Sign up">Create my account {icon("check", "1.2rem")}</a>'
-        '<a class="btn ghost" href="#" data-goto="Log in">Log in</a></div></div>',
+        '<a class="btn ghost" href="#" data-goto="Log in">Log in</a></div></div></div></div>',
         unsafe_allow_html=True,
     )
     render_footer()

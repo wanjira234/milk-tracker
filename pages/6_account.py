@@ -1,11 +1,13 @@
 """Your login: set an email and password so you can log in without waiting for an SMS."""
 import streamlit as st
 
+from src.messages import ICON
+
 from src import accounts, db
 from src.auth import require_login
 from src.ui import cap
 
-st.set_page_config(page_title="My account", page_icon="🥛", layout="centered")
+st.set_page_config(page_title="My account", page_icon=ICON, layout="centered")
 user = require_login()
 
 st.title("My account")

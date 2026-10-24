@@ -4,11 +4,13 @@ from zoneinfo import ZoneInfo
 
 import streamlit as st
 
+from src.messages import ICON
+
 from src import accounts, alerts, db, sms
 from src.auth import require_login
 from src.ui import cap
 
-st.set_page_config(page_title="Alerts", page_icon="🥛", layout="centered")
+st.set_page_config(page_title="Alerts", page_icon=ICON, layout="centered")
 user = require_login()
 TZ = ZoneInfo("Africa/Nairobi")
 can_post = user["role"] in ("admin", "vet")

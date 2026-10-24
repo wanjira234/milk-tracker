@@ -15,7 +15,7 @@ def test_every_image_the_pages_use_exists():
 def test_hero_shows_photo_without_video(monkeypatch):
     monkeypatch.setattr(public_site, "HERO_VIDEO", "/nonexistent/hero.mp4")
     html = public_site._hero()
-    assert "<video" not in html and "hero-cow.jpg" in html and 'alt="' in html
+    assert "<video" not in html and "hero-farm.jpg" in html and 'alt="' in html
     assert 'data-goto="Sign up"' in html and 'data-goto="Log in"' in html
 
 

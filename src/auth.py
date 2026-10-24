@@ -62,7 +62,7 @@ LOGGED_OUT_CSS = (
     "<style>@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@600&display=swap');"
     '[data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"],[data-testid="stExpandSidebarButton"]'
     "{display:none}"
-    ".block-container{max-width:1120px;padding-top:5.2rem;padding-bottom:0}"
+    ".block-container{max-width:1120px;padding-top:0;padding-bottom:0}"
     '[data-testid="stHeader"]{display:none}'
     # The page links live in our own top bar; hide only the outer tab strip (not the Email / SMS tabs inside Log in).
     '[data-testid="stTabs"]:not([data-testid="stTabs"] [data-testid="stTabs"]) > div > [role="tablist"]{display:none}'
@@ -286,7 +286,7 @@ def require_login(roles=None):
         with t_login:
             public_site.page_title("Welcome back", "Log in to see your farm, your route or the admin view.")
             mid = st.columns([1, 3, 1])[1]  # a narrow form reads better than one stretched across the page
-            with mid:
+            with mid, st.container(border=True):
                 methods = ["Email & password", "SMS code"] + (["Owner password"] if owner_pw else [])
                 for tab, name in zip(st.tabs(methods), methods):
                     with tab:
@@ -294,7 +294,7 @@ def require_login(roles=None):
             public_site.render_footer()
         with t_signup:
             public_site.page_title("Create your account", "Farmers, vets and milk-buyer staff each get their own view.")
-            with st.columns([1, 3, 1])[1]:
+            with st.columns([1, 3, 1])[1], st.container(border=True):
                 _tab_signup()
             public_site.render_footer()
         st.stop()

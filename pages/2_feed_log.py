@@ -4,12 +4,14 @@ from datetime import date, timedelta
 import pandas as pd
 import streamlit as st
 
+from src.messages import ICON
+
 from src import db
 from src.ingestion.manual_entry import BUCKET_LITRES, SESSIONS, record_feed, record_feed_units, record_water, record_yield
 from src.ui import cap, farmer_selector
 from src.auth import require_login
 
-st.set_page_config(page_title="Feed log", page_icon="🥛", layout="centered")
+st.set_page_config(page_title="Feed log", page_icon=ICON, layout="centered")
 require_login(roles=("farmer",))
 st.title("Feed log")
 
