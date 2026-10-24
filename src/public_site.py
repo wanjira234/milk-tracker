@@ -98,6 +98,20 @@ PUBLIC_CSS = (
     ".hero h1{font-size:3.9rem;line-height:1.03;margin:1rem 0 1rem !important;color:#fff}"
     ".hero h1 em{font-style:normal;background:linear-gradient(90deg,#FFC766,#F2A93B);-webkit-background-clip:text;background-clip:text;color:transparent}"
     ".hero p.lead{font-size:1.2rem;line-height:1.6;color:#DCEBE1;max-width:33rem;margin:0 0 1.6rem}"
+    ".fl{position:relative;margin-left:auto;max-width:25rem;animation:bob 7s ease-in-out infinite}"
+    ".fl .insight{margin:0;max-width:none}"
+    ".fchip{position:absolute;z-index:4;display:inline-flex;align-items:center;gap:.45rem;padding:.5rem .8rem;border-radius:14px;font-size:.82rem;font-weight:600;color:#fff;"
+    "background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:0 14px 34px rgba(0,0,0,.35);white-space:nowrap}"
+    ".fchip svg{color:#FFC766}"
+    ".fchip.c1{top:-1.6rem;left:-2.4rem;animation:bob 6s ease-in-out -1s infinite}"
+    ".fchip.c2{bottom:-1.4rem;left:-1.8rem;animation:bob 8s ease-in-out -3s infinite}"
+    ".fchip.c3{bottom:-1.6rem;right:-1.2rem;animation:bob 7s ease-in-out -2s infinite}"
+    ".cloud{position:absolute;z-index:2;border-radius:999px;background:rgba(255,255,255,.14);filter:blur(1px);animation:drift 38s linear infinite}"
+    ".cloud:before,.cloud:after{content:'';position:absolute;background:inherit;border-radius:50%}"
+    ".cloud{width:7rem;height:1.6rem}.cloud:before{width:3rem;height:3rem;left:1rem;top:-1.3rem}.cloud:after{width:2.2rem;height:2.2rem;left:3.6rem;top:-.9rem}"
+    ".cloud.k1{top:16%;left:-10rem}.cloud.k2{top:30%;left:-10rem;animation-duration:55s;animation-delay:-20s;transform:scale(.7);opacity:.7}"
+    "@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}"
+    "@keyframes drift{from{translate:0 0}to{translate:calc(100vw + 20rem) 0}}"
     ".insight{padding:1.2rem 1.3rem;max-width:25rem;margin-left:auto;background:rgba(7,20,14,.55)}"
     ".insight .ih{display:flex;justify-content:space-between;align-items:center;font-weight:600;color:#fff;margin-bottom:.8rem}"
     ".insight .ih{gap:.8rem}.insight .ih span{display:inline-flex;gap:.5rem;align-items:center;white-space:nowrap}"
@@ -237,7 +251,7 @@ PUBLIC_CSS = (
     ".tile.wideg,.tile.wide{grid-column:span 2}.datagrid{grid-template-columns:1fr 1fr}.split{grid-template-columns:1fr}}"
     "@media (max-width:760px){"
     ".topin{padding:.45rem .8rem}.nav a{padding:.5rem .55rem;font-size:.92rem}.brand .bn{display:none}.brand svg{width:2.4rem;height:2.4rem}"
-    ".hero{padding-top:9.5rem}.hero .cols{grid-template-columns:1fr}.hero h1{font-size:2.6rem}.insight{margin:1rem 0 0;max-width:none}"
+    ".hero{padding-top:9.5rem}.hero .cols{grid-template-columns:1fr}.hero h1{font-size:2.6rem}.fl{margin:1rem 0 0;max-width:none}.fchip,.cloud{display:none}"
     ".hero .shade{background:linear-gradient(180deg,rgba(7,20,14,.7) 0%,rgba(7,20,14,.8) 100%)}.hero video{display:none}"
     ".stats{grid-template-columns:1fr 1fr;margin-top:1.6rem}"
     ".grid3,.bento,.datagrid{grid-template-columns:1fr}.tile.photo,.tile.wideg,.tile.wide{grid-column:auto}"
@@ -245,7 +259,7 @@ PUBLIC_CSS = (
     ".band{grid-template-columns:1fr}.band .bt{padding:1.8rem 1.4rem}.band .bigstat{font-size:4rem}.band .im{min-height:12rem}"
     ".about{grid-template-columns:1fr}.about .ph img{height:20rem}.tiles3{grid-template-columns:1fr 1fr 1fr}"
     ".fgrid{grid-template-columns:1fr 1fr}}"
-    "@media (prefers-reduced-motion:reduce){.hero video{display:none}.flipc .fi{transition:none}.tile,.about,.cinfo,.band,.cta,.sdg,.win,.stats{animation:none !important}}"
+    "@media (prefers-reduced-motion:reduce){.fl,.fchip,.cloud{animation:none !important}.hero video{display:none}.flipc .fi{transition:none}.tile,.about,.cinfo,.band,.cta,.sdg,.win,.stats{animation:none !important}}"
     "</style>"
 )
 
@@ -364,8 +378,14 @@ def _hero():
         f'<div class="stat"><div class="tileic{" amb" if i % 2 else ""}">{icon(ic, "1.3rem")}</div><div><b>{t}</b><span>{x}</span></div></div>'
         for i, (ic, t, x) in enumerate(stats)
     )
+    chips = (
+        f'<span class="fchip c1">{icon("leaf", "1rem")} Feed pays back</span>'
+        f'<span class="fchip c2">{icon("calendar", "1rem")} Vet visit booked</span>'
+        f'<span class="fchip c3">{icon("phone", "1rem")} SMS sent</span>'
+    )
     return (
-        f'<section class="bleed hero">{bg}<div class="shade"></div><div class="wrap"><div class="cols">{txt}{insight}</div>'
+        f'<section class="bleed hero">{bg}<div class="cloud k1"></div><div class="cloud k2"></div><div class="shade"></div>'
+        f'<div class="wrap"><div class="cols">{txt}<div class="fl">{chips}{insight}</div></div>'
         f'<div class="g stats">{strip}</div></div></section>'
     )
 
