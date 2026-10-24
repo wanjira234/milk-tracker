@@ -253,6 +253,8 @@ def require_login(roles=None):
         st.markdown(LOGGED_OUT_CSS, unsafe_allow_html=True)
         st.title(APP_NAME)
         st.caption(TAGLINE)
+        if st.session_state.pop("account_deleted", False):
+            st.success("Your account and its records have been deleted.")
         if _too_many():
             st.error("Too many wrong tries. Reload the page to try again.")
             st.stop()

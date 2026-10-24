@@ -329,6 +329,31 @@ def update_user(user_id, **fields):
     _query(f"UPDATE users SET {sets} WHERE id = %s", (*fields.values(), user_id))
 
 
+def count_active_admins():
+    return _query("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active AND NOT pending", one=True)["n"]
+
+
+def delete_user(user_id):
+    """Remove a login. A vet's priced semen goes with them, so past requests keep their price but
+    forget which list item it was."""
+    with batch():
+        _query(
+            "UPDATE service_requests SET semen_id = NULL WHERE semen_id IN (SELECT id FROM vet_semen WHERE vet_user_id = %s)",
+            (user_id,),
+        )
+        _query("DELETE FROM users WHERE id = %s", (user_id,))
+
+
+def delete_farm(farmer_id):
+    """Remove a farm with everything recorded for it, and its login (the database cascades)."""
+    _query("DELETE FROM farmers WHERE id = %s", (farmer_id,))
+
+
+def delete_route(route_id):
+    """Remove a route. Its farms stay, unassigned; alerts and vaccination days for it go with it."""
+    _query("DELETE FROM routes WHERE id = %s", (route_id,))
+
+
 def farmer_by_phone(phone):
     return _query("SELECT * FROM farmers WHERE phone = %s", (phone,), one=True)
 

@@ -289,3 +289,71 @@ def approve_signup(user_id):
 
 def reject_signup(user_id):
     db.delete_pending_user(user_id)
+
+
+# --- deleting ------------------------------------------------------------------------------
+
+CONFIRM_WORD = "DELETE"
+
+
+def _confirmed(text):
+    if str(text or "").strip() != CONFIRM_WORD:
+        raise ValueError(f"type {CONFIRM_WORD} to confirm")
+
+
+def _last_admin(user_id):
+    target = db.get_user(user_id)
+    return bool(target and target["role"] == "admin" and target["active"] and db.count_active_admins() <= 1)
+
+
+def delete_own_account(user, confirm):
+    """A person deletes their own account. A farmer's farm and all its records go too; a vet's semen list
+    goes with them. The only admin cannot leave nobody in charge."""
+    _confirmed(confirm)
+    if not user or user.get("id") is None:
+        raise ValueError("the owner password login has no account to delete")
+    if _last_admin(user["id"]):
+        raise ValueError("you are the only admin; make another admin first")
+    row = db.get_user(user["id"])
+    if not row:
+        raise ValueError("that account no longer exists")
+    if row["role"] == "farmer" and row["farmer_id"]:
+        db.delete_farm(row["farmer_id"])  # the login goes with it
+    else:
+        db.delete_user(row["id"])
+
+
+def _need_admin(actor):
+    if not actor or actor.get("role") != "admin":
+        raise ValueError("only an admin can do that")
+
+
+def admin_delete_login(actor, user_id, confirm):
+    """Remove one login. A farmer's farm and records stay (use delete farm to remove those too)."""
+    _need_admin(actor)
+    _confirmed(confirm)
+    if user_id == actor.get("id"):
+        raise ValueError("you cannot delete your own login here; use My account")
+    if _last_admin(user_id):
+        raise ValueError("that is the only admin")
+    if not db.get_user(user_id):
+        raise ValueError("that login no longer exists")
+    db.delete_user(user_id)
+
+
+def admin_delete_farm(actor, farmer_id, confirm):
+    """Remove a farm with every record for it, and its farmer login."""
+    _need_admin(actor)
+    _confirmed(confirm)
+    if not db.get_farmer(farmer_id):
+        raise ValueError("that farm no longer exists")
+    db.delete_farm(farmer_id)
+
+
+def admin_delete_route(actor, route_id, confirm):
+    """Remove a route. Its farms stay, unassigned."""
+    _need_admin(actor)
+    _confirmed(confirm)
+    if route_id not in {r["id"] for r in db.list_routes()}:
+        raise ValueError("that route no longer exists")
+    db.delete_route(route_id)
