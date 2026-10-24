@@ -383,6 +383,29 @@ def farmers_on_routes(route_ids):
     return _query("SELECT * FROM farmers WHERE route_id = ANY(%s) AND active ORDER BY id", (sorted(route_ids),))
 
 
+def add_contact_message(name, contact, message):
+    return _query(
+        "INSERT INTO contact_messages (name, contact, message) VALUES (%s, %s, %s) RETURNING id",
+        (name, contact, message), one=True,
+    )["id"]
+
+
+def count_unhandled_messages():
+    return _query("SELECT COUNT(*) AS n FROM contact_messages WHERE NOT handled", one=True)["n"]
+
+
+def list_contact_messages(limit=50):
+    return _query("SELECT id, name, contact, message, created_at, handled FROM contact_messages ORDER BY handled, created_at DESC LIMIT %s", (limit,))
+
+
+def set_message_handled(message_id, handled=True):
+    _query("UPDATE contact_messages SET handled = %s WHERE id = %s", (handled, message_id))
+
+
+def delete_contact_message(message_id):
+    _query("DELETE FROM contact_messages WHERE id = %s", (message_id,))
+
+
 def farmer_by_phone(phone):
     return _query("SELECT * FROM farmers WHERE phone = %s", (phone,), one=True)
 

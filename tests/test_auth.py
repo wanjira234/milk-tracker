@@ -56,7 +56,8 @@ def test_every_page_offers_the_logins_and_never_touches_the_database(monkeypatch
     monkeypatch.setenv("APP_PASSWORD", "open-sesame")
     at = run(page)
     assert not at.exception  # a database call would have raised
-    assert [t.label for t in at.tabs] == ["Email & password", "SMS code", "Sign up", "Owner password"]
+    assert {"Home", "Log in", "Sign up", "About us", "Contact us"} <= {t.label for t in at.tabs}  # the public site
+    assert {"Email & password", "SMS code", "Owner password"} <= {t.label for t in at.tabs}  # the ways to log in
     assert key(at, "text_input", "owner_password")
 
 
@@ -73,7 +74,7 @@ def test_wrong_owner_password_is_refused_and_locks_after_too_many_tries(monkeypa
     at = run("app.py")
     for _ in range(MAX_WRONG):
         key(at, "text_input", "owner_password").set_value("nope")
-        at.button[-1].click().run()
+        [b for b in at.button if b.label == "Log in"][-1].click().run()
         assert "user" not in at.session_state
     at = at.run()
     assert "Too many" in at.error[0].value and not at.text_input
@@ -85,7 +86,7 @@ def test_right_owner_password_logs_in_as_admin(monkeypatch):
         monkeypatch.setattr(f"src.db.{fn}", lambda *a, **k: [])  # stand-in for the database
     at = run("app.py")
     key(at, "text_input", "owner_password").set_value("open-sesame")
-    at.button[-1].click().run()
+    [b for b in at.button if b.label == "Log in"][-1].click().run()
     assert not at.exception and at.session_state["user"]["role"] == "admin"
     assert at.expander[0].label == "Add a farmer without a login"  # the admin overview is showing
     assert at.metric[0].label == "Farmers"

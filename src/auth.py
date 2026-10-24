@@ -62,7 +62,7 @@ LOGGED_OUT_CSS = (
     "<style>"
     '[data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"],[data-testid="stExpandSidebarButton"]'
     "{display:none}"
-    ".block-container{max-width:560px;padding-top:2.5rem}"
+    ".block-container{max-width:980px;padding-top:3.5rem}"
     # Large touch targets and 16px text in the boxes (a smaller size makes phones zoom in on focus).
     "button[kind],[data-testid='stFormSubmitButton'] button{min-height:3rem}"
     "input{font-size:16px !important}"
@@ -288,10 +288,26 @@ def require_login(roles=None):
         if _too_many():
             st.error("Too many wrong tries. Reload the page to try again.")
             st.stop()
-        names = ["Email & password", "SMS code", "Sign up"] + (["Owner password"] if owner_pw else [])
-        for tab, name in zip(st.tabs(names), names):
-            with tab:
-                {"SMS code": _tab_sms, "Email & password": _tab_email, "Sign up": _tab_signup}.get(name, lambda: _tab_owner(owner_pw))()
+        from src import public_site
+
+        top = ["Home", "Log in", "Sign up", "About us", "Contact us"]
+        t_home, t_login, t_signup, t_about, t_contact = st.tabs(top)
+        with t_home:
+            public_site.render_home()
+        with t_login:
+            mid = st.columns([1, 3, 1])[1]  # a narrow form reads better than one stretched across the page
+            with mid:
+                methods = ["Email & password", "SMS code"] + (["Owner password"] if owner_pw else [])
+                for tab, name in zip(st.tabs(methods), methods):
+                    with tab:
+                        {"SMS code": _tab_sms, "Email & password": _tab_email}.get(name, lambda: _tab_owner(owner_pw))()
+        with t_signup:
+            with st.columns([1, 3, 1])[1]:
+                _tab_signup()
+        with t_about:
+            public_site.render_about()
+        with t_contact:
+            public_site.render_contact()
         st.stop()
     if user.get("must_change_password"):
         _force_password_change(user)

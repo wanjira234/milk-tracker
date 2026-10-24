@@ -34,6 +34,9 @@ What is protected, how, and what is not done yet. The application-level items un
 
 See [docs/SSDLC.md](docs/SSDLC.md) for the risk assessment, threat model and testing by development stage.
 
+**Public pages**
+- Home, About us and Contact us are fixed text. The Contact us form is the one place a visitor who is not logged in can write to the database, so every field is capped, a browser can send one message a minute, and the inbox stops taking messages at 200 unread. The admin sees messages as plain text.
+
 ## Not done yet
 
 - No email or phone verification at sign-up (the admin's approval is the check).
