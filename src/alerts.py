@@ -17,7 +17,7 @@ MAX_TITLE = 60
 MAX_BODY = 400
 
 
-def _routes_of(user):
+def routes_of(user):
     """None = any route (admin); otherwise the set of route ids this vet looks after."""
     if user["role"] == "admin":
         return None
@@ -46,7 +46,7 @@ def sms_problem(text):
 def can_send(user, alert):
     """Whether this login may text this alert (an admin any; a vet only alerts for their own routes)."""
     try:
-        allowed = _routes_of(user)
+        allowed = routes_of(user)
     except ValueError:
         return False
     return allowed is None or alert["route_id"] in allowed
@@ -55,7 +55,7 @@ def can_send(user, alert):
 def post_alert(user, kind, title, body, route_id=None, expires_on=None, today=None):
     """Save an alert (in-app; texting is a separate step). Returns its id."""
     today = today or date.today()
-    allowed = _routes_of(user)
+    allowed = routes_of(user)
     if kind not in KINDS:
         raise ValueError("choose outbreak or notice")
     title, body = " ".join(str(title or "").split()), " ".join(str(body or "").split())
@@ -79,7 +79,7 @@ def post_alert(user, kind, title, body, route_id=None, expires_on=None, today=No
 
 def send_alert_sms(alert_id, user, client=None):
     """Text an alert to the farms it is for, once. Returns {"ok": n, "failed": m}."""
-    allowed = _routes_of(user)
+    allowed = routes_of(user)
     alert = db.get_alert(alert_id)
     if not alert:
         raise ValueError("that alert does not exist")
@@ -108,7 +108,7 @@ def visible_alerts(user, today=None):
     if user["role"] == "admin":
         return db.list_alerts(today)
     if user["role"] == "vet":
-        return db.list_alerts(today, _routes_of(user))
+        return db.list_alerts(today, routes_of(user))
     farm = db.get_farmer(user["farmer_id"]) if user["farmer_id"] else None
     return db.list_alerts(today, [farm["route_id"]] if farm and farm["route_id"] else [])
 

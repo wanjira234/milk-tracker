@@ -106,15 +106,19 @@ def test_a_temporary_password_must_be_changed_before_anything_else(monkeypatch):
     assert not at.metric
 
 
-def test_each_role_sees_only_its_own_pages_in_the_menu():
-    from src.auth import ALL_PAGES, hide_other_pages_css
+def test_each_role_gets_its_own_menu_and_every_page_is_reachable_by_someone():
+    from src.auth import MENU, menu_for
 
-    farmer, vet, admin = (hide_other_pages_css(r) for r in ("farmer", "vet", "admin"))
-    assert '"/admin"' in farmer and '"/my_day"' in farmer and '"/ask_the_vet"' not in farmer
-    assert '"/ask_the_vet"' in vet and '"/my_day"' not in vet and '"/admin"' in vet
-    assert '"/attendance"' not in admin and '"/my_day"' in admin and '"/ask_the_vet"' in admin
-    assert hide_other_pages_css("stranger") == ""  # unknown role: change nothing (the pages still refuse)
-    assert ALL_PAGES >= {"admin", "my_day", "ask_the_vet", "attendance"}
+    labels = lambda r: [label for _, label in menu_for(r)]  # noqa: E731
+    assert "Ask the vet" in labels("farmer") and "Admin" not in labels("farmer") and "My day" not in labels("farmer")
+    assert "My day" in labels("vet") and "Ask the vet" not in labels("vet") and "Admin" not in labels("vet")
+    assert "Admin" in labels("admin") and "Attendance" in labels("admin") and "My day" not in labels("admin")
+    for role in MENU:  # alerts and vaccination are for everyone, and every link points at a real file
+        assert {"Alerts", "Vaccination", "Home", "Account"} <= set(labels(role))
+        assert all(os.path.exists(os.path.join(ROOT, path)) for path, _ in menu_for(role))
+    reachable = {path for role in MENU for path, _ in menu_for(role)}
+    assert reachable == {"app.py"} | set(glob.glob("pages/*.py")), "a page exists that no role can reach, or a menu link is dead"
+    assert menu_for("stranger") == []
 
 
 def test_the_sign_in_screen_hides_the_page_menu_and_a_logged_in_page_does_not(monkeypatch):

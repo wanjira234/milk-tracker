@@ -144,16 +144,20 @@ def complete_request(request_id, vet_user, notes=None, semen_id=None, today=None
 
 def carry_list(visits):
     """What the vet needs in the bag for these visits, as plain lines."""
-    semen, sick, other = {}, 0, 0
+    semen, vaccines, sick, other = {}, {}, 0, 0
     for v in visits:
         if v["kind"] == "ai":
             name = v["semen_name"] or "semen (to be chosen)"
             semen[name] = semen.get(name, 0) + 1
+        elif v["kind"] == "vaccination":
+            name = v.get("vaccine") or "vaccine"
+            vaccines[name] = vaccines.get(name, 0) + (v.get("animals") or 1)
         elif v["kind"] == "sick":
             sick += 1
         elif v["kind"] == "other":
             other += 1
     lines = [f"{name}: {n} straw{'s' if n != 1 else ''}" for name, n in sorted(semen.items())]
+    lines += [f"{name}: {n} dose{'s' if n != 1 else ''}" for name, n in sorted(vaccines.items())]
     if sick:
         lines.append(f"treatment kit for {sick} sick-cow visit{'s' if sick != 1 else ''}")
     if other:

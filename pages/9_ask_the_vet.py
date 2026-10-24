@@ -57,6 +57,8 @@ for q in rows:
             f"**{services.KINDS[q['kind']]}**" + (f" · {q['cow_tag']}" if q["cow_tag"] else "")
             + f" · {services.STATUS_WORDS[q['status']]}" + (f" ({when})" if q["status"] in ("open", "scheduled") else "")
         )
+        if q["vaccine"]:
+            st.caption(f"{q['vaccine']} · {q['animals']} animal{'s' if q['animals'] != 1 else ''}")
         if q["semen_name"]:
             st.caption(f"{q['semen_name']} · KES {float(q['semen_price_kes']):,.0f}")
         if q["status"] == "done" and q["vet_notes"]:
