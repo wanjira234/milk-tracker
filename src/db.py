@@ -5,6 +5,7 @@ from contextlib import contextmanager
 from datetime import date
 
 import psycopg2
+from psycopg2 import pool as pg_pool
 from psycopg2.extras import RealDictCursor
 
 try:
@@ -42,23 +43,67 @@ def batch():
         conn.close()
 
 
+_pool = None
+_pool_lock = threading.Lock()
+_pool_url = None
+
+
+def _get_pool():
+    """One small pool per process, so a click doesn't pay for a fresh TLS handshake to the database.
+    Rebuilt if DATABASE_URL changes (tests, secrets edits)."""
+    global _pool, _pool_url
+    url = os.environ["DATABASE_URL"]
+    with _pool_lock:
+        if _pool is None or _pool_url != url:
+            if _pool is not None:
+                _pool.closeall()
+                _pool = None  # so a failed rebuild below can't leave a closed pool behind
+            _pool = pg_pool.ThreadedConnectionPool(1, 8, url)
+            _pool_url = url
+        return _pool
+
+
+def _checkout():
+    """A live pooled connection; stale ones (closed by the server while idle) are discarded."""
+    pool = _get_pool()
+    for _ in range(3):
+        conn = pool.getconn()
+        try:
+            if conn.closed:
+                raise psycopg2.OperationalError("closed")
+            conn.autocommit = False
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+            conn.rollback()
+            return pool, conn
+        except psycopg2.Error:
+            pool.putconn(conn, close=True)
+    return pool, pool.getconn()
+
+
 @contextmanager
 def get_conn():
-    """Yield a connection; commit on success, roll back on error, always close.
+    """Yield a pooled connection; commit on success, roll back on error, always hand it back.
     Inside `batch()` the shared connection is used instead and the batch does the commit."""
     shared = getattr(_local, "conn", None)
     if shared is not None:
         yield shared
         return
-    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    pool, conn = _checkout()
     try:
         yield conn
         conn.commit()
     except Exception:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except psycopg2.Error:
+            pass
         raise
     finally:
-        conn.close()
+        try:
+            pool.putconn(conn, close=bool(conn.closed))
+        except pg_pool.PoolError:  # pool was replaced (DATABASE_URL changed) while this was in use
+            conn.close()
 
 
 def _query(sql, params=(), one=False):

@@ -38,7 +38,7 @@ def test_many_queries_in_a_batch_use_one_connection(connects):
     before = len(connects)
     for i in range(3):
         db.list_farmers()
-    assert len(connects) == before + 3  # outside a batch, each query still connects on its own
+    assert len(connects) <= before + 1  # outside a batch, queries reuse pooled connections instead of reconnecting
 
 
 def test_a_failure_inside_a_batch_undoes_everything():
@@ -62,7 +62,7 @@ def test_the_shared_connection_is_released_afterwards(connects):
         db.add_farmer("A", "+254700000101")
     assert getattr(db._local, "conn", None) is None
     db.add_farmer("B", "+254700000102")
-    assert len(connects) == 2
+    assert len(connects) <= 2  # the batch's own connection, plus at most one pooled one
 
 
 def test_the_demo_seed_runs_on_a_single_connection_and_leaves_nothing_behind_if_it_fails(connects, monkeypatch):
