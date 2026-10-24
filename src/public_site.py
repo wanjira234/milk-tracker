@@ -154,9 +154,9 @@ PUBLIC_CSS = (
     ".tile.warm{background:linear-gradient(135deg,rgba(242,169,59,.2),rgba(255,255,255,.04))}"
     ".tile.wide{grid-column:span 2}"
     # roles and sdg
-    ".role{position:relative;min-height:21rem;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;padding:0}"
+    ".role{position:relative;min-height:22rem;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;padding:0}"
     ".role img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}"
-    ".role:after{content:'';position:absolute;inset:0;background:linear-gradient(0deg,rgba(7,20,14,.95) 0%,rgba(7,20,14,.3) 60%,rgba(7,20,14,0) 100%)}"
+    ".role.front:after{content:'';position:absolute;inset:0;background:linear-gradient(0deg,rgba(7,20,14,.95) 0%,rgba(7,20,14,.3) 60%,rgba(7,20,14,0) 100%)}"
     ".role .rb{position:relative;z-index:2;padding:1.4rem}"
     ".role h3{font-size:1.5rem;margin-bottom:.35rem !important;color:#fff}.role p{margin:0;color:#DCEBE1;line-height:1.5}"
     ".sdg{padding:1.5rem}"
@@ -213,9 +213,26 @@ PUBLIC_CSS = (
     "[data-testid='stForm'] [data-testid='stMarkdownContainer'] p,[data-testid='stAlert'] p,[data-testid='stAlert'] li{color:#1B2B22}"
     "[data-testid='stForm'] [data-testid='stWidgetLabel'] p,[data-testid='stForm'] label p,[data-testid='stForm'] [data-testid='stCaptionContainer']{color:#1B2B22}"
     "[data-testid='stForm'] button p,[data-testid='stFormSubmitButton'] button p{color:#fff !important}"
+    # interactive: tap or click to flip, tilt toward the pointer
+    ".flipc{height:100%;perspective:1100px;cursor:pointer;outline-offset:5px;-webkit-tap-highlight-color:transparent}"
+    ".flipc .fi{height:100%;display:grid;transform-style:preserve-3d;transition:transform .7s cubic-bezier(.2,.8,.2,1);"
+    "transform:rotateX(var(--rx,0deg)) rotateY(calc(var(--ry,0deg) + var(--fl,0deg)))}"
+    ".flipc.on{--fl:180deg}"
+    ".flipc .front,.flipc .back{grid-area:1/1;backface-visibility:hidden;-webkit-backface-visibility:hidden;backdrop-filter:none;-webkit-backdrop-filter:none}"
+    ".flipc .back{transform:rotateY(180deg);background:linear-gradient(135deg,#14452F,#0A2016);padding:1.7rem;display:flex;flex-direction:column;justify-content:center;overflow:hidden}"
+    ".flipc .g:hover{transform:none}.flipc .back:hover{transform:rotateY(180deg)}"
+    ".flipc:active .fi{filter:brightness(1.08)}"
+    ".flipc .back h3{font-size:1.4rem;color:#fff;margin-bottom:.7rem !important}"
+    ".flipc .back ul{list-style:none;padding:0;margin:0}.flipc .back li{display:flex;gap:.6rem;align-items:flex-start;padding:.35rem 0;color:#DCEBE1;line-height:1.45}"
+    ".flipc .back li svg{color:#8FE0A8;margin-top:.15rem}"
+    ".flipc .back .eg{color:#FFE2A8;font-style:italic;line-height:1.55;font-size:1.05rem;border-left:3px solid #F2A93B;padding-left:.9rem}"
+    ".hint{display:inline-flex;align-items:center;gap:.4rem;margin-top:.8rem;font-size:.8rem;font-weight:700;color:#FFE2A8;letter-spacing:.04em}"
+    ".step.front,.step.back{min-height:15rem}"
+    ".g[data-tilt]{transition:transform .18s ease-out,border-color .25s,box-shadow .25s}"
+    ".g[data-tilt]:hover{transform:perspective(900px) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg)) translateY(-5px)}"
     # motion
     "@keyframes rise{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:none}}"
-    "@supports (animation-timeline:view()){.step,.tile,.role,.about,.cinfo,.band,.cta,.sdg,.win,.stats{animation:rise both;animation-timeline:view();animation-range:entry 0% entry 35%}}"
+    "@supports (animation-timeline:view()){.flipc,.tile,.about,.cinfo,.band,.cta,.sdg,.win,.stats{animation:rise both;animation-timeline:view();animation-range:entry 0% entry 35%}}"
     "@media (max-width:900px){.bento{grid-template-columns:1fr 1fr}.tile.photo{grid-column:span 2;grid-row:span 1;min-height:18rem}"
     ".tile.wideg,.tile.wide{grid-column:span 2}.datagrid{grid-template-columns:1fr 1fr}.split{grid-template-columns:1fr}}"
     "@media (max-width:760px){"
@@ -228,7 +245,7 @@ PUBLIC_CSS = (
     ".band{grid-template-columns:1fr}.band .bt{padding:1.8rem 1.4rem}.band .bigstat{font-size:4rem}.band .im{min-height:12rem}"
     ".about{grid-template-columns:1fr}.about .ph img{height:20rem}.tiles3{grid-template-columns:1fr 1fr 1fr}"
     ".fgrid{grid-template-columns:1fr 1fr}}"
-    "@media (prefers-reduced-motion:reduce){.hero video{display:none}.step,.tile,.role,.about,.cinfo,.band,.cta,.sdg,.win,.stats{animation:none !important}}"
+    "@media (prefers-reduced-motion:reduce){.hero video{display:none}.flipc .fi{transition:none}.tile,.about,.cinfo,.band,.cta,.sdg,.win,.stats{animation:none !important}}"
     "</style>"
 )
 
@@ -236,21 +253,28 @@ PUBLIC_CSS = (
 # blocked the buttons do nothing. The page text is fixed; nothing typed is used here.
 GOTO_JS = (
     "<script>(function(){var p=window.parent,d=p.document;if(p.__gotoReady)return;p.__gotoReady=true;"
-    "d.addEventListener('click',function(e){var a=e.target.closest('[data-goto]');if(!a)return;e.preventDefault();"
+    "var flip=function(f){f.classList.toggle('on')};"
+    "d.addEventListener('click',function(e){var f=e.target.closest('.flipc');if(f){flip(f);return;}"
+    "var a=e.target.closest('[data-goto]');if(!a)return;e.preventDefault();"
     "var want=a.getAttribute('data-goto'),sc=a.getAttribute('data-scroll');"
     "var t=[].slice.call(d.querySelectorAll('[role=tab]')).find(function(b){return b.innerText.trim()===want});"
     "var go=function(){var el=sc&&d.querySelector('[data-anchor=\"'+sc+'\"]');"
     "if(el){el.scrollIntoView({behavior:'smooth',block:'start'});return}"
     "var m=d.querySelector('[data-testid=stMain]');if(m)m.scrollTo({top:0,behavior:'smooth'});};"
-    "if(t&&t.getAttribute('aria-selected')!=='true'){t.click();setTimeout(go,300);}else{go();}},true);})();</script>"
+    "if(t&&t.getAttribute('aria-selected')!=='true'){t.click();setTimeout(go,300);}else{go();}},true);"
+    "d.addEventListener('keydown',function(e){var f=e.target.classList&&e.target.classList.contains('flipc')&&e.target;"
+    "if(f&&(e.key==='Enter'||e.key===' ')){e.preventDefault();flip(f);}},true);"
+    "var raf=0,reduce=p.matchMedia&&p.matchMedia('(prefers-reduced-motion: reduce)').matches;"
+    "d.addEventListener('pointermove',function(e){if(reduce||e.pointerType==='touch'||!e.target.closest)return;"
+    "var t=e.target.closest('[data-tilt]');if(!t)return;var r=t.getBoundingClientRect(),x=(e.clientX-r.left)/r.width-.5,y=(e.clientY-r.top)/r.height-.5;"
+    "cancelAnimationFrame(raf);raf=requestAnimationFrame(function(){t.style.setProperty('--ry',(x*9).toFixed(2)+'deg');t.style.setProperty('--rx',(-y*9).toFixed(2)+'deg');});},true);"
+    "d.addEventListener('pointerout',function(e){var t=e.target.closest&&e.target.closest('[data-tilt]');"
+    "if(t&&!t.contains(e.relatedTarget)){t.style.setProperty('--rx','0deg');t.style.setProperty('--ry','0deg');}},true);"
+    "})();</script>"
 )
 
 LOGO_SVG = (
-    '<svg viewBox="0 0 64 64" role="img" aria-label="Maziwa Plus logo" xmlns="http://www.w3.org/2000/svg">'
-    '<defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2A6F46"/><stop offset="1" stop-color="#0F3A26"/></linearGradient></defs>'
-    '<circle cx="32" cy="32" r="30" fill="url(#lg)" stroke="#F2A93B" stroke-width="3"/>'
-    '<path d="M32 11C32 11 17 27 17 38a15 15 0 0 0 30 0C47 27 32 11 32 11z" fill="#FFF8EA"/>'
-    '<rect x="30" y="31" width="4" height="15" rx="1.5" fill="#F2A93B"/><rect x="24.5" y="36.5" width="15" height="4" rx="1.5" fill="#F2A93B"/></svg>'
+    '<svg viewBox="0 0 64 64" role="img" aria-label="Maziwa Plus logo: a friendly cow chewing grass" xmlns="http://www.w3.org/2000/svg"> <defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2A6F46"/><stop offset="1" stop-color="#0F3A26"/></linearGradient></defs> <circle cx="32" cy="32" r="30" fill="url(#lg)" stroke="#F2A93B" stroke-width="3"/> <g stroke-linecap="round" fill="none"><path d="M23 19Q19 11 14.5 12.5" stroke="#F2A93B" stroke-width="3"/><path d="M41 19Q45 11 49.5 12.5" stroke="#F2A93B" stroke-width="3"/></g> <ellipse cx="14" cy="24" rx="6.5" ry="3.8" transform="rotate(-28 14 24)" fill="#C9772B"/><ellipse cx="14.5" cy="24" rx="3.6" ry="1.9" transform="rotate(-28 14.5 24)" fill="#F2B27A"/> <ellipse cx="50" cy="24" rx="6.5" ry="3.8" transform="rotate(28 50 24)" fill="#C9772B"/><ellipse cx="49.5" cy="24" rx="3.6" ry="1.9" transform="rotate(28 49.5 24)" fill="#F2B27A"/> <path d="M21 19Q32 14 43 19Q47 29 44.5 39Q42 51 32 53Q22 51 19.5 39Q17 29 21 19Z" fill="#FFF8EA"/> <path d="M21.5 20Q27 17.5 30 21Q27 30 21 31Q19.5 25 21.5 20Z" fill="#7A3E16"/> <circle cx="25.5" cy="27" r="2" fill="#1B2B22"/><circle cx="26.1" cy="26.3" r=".6" fill="#fff"/> <circle cx="38.5" cy="27" r="2" fill="#1B2B22"/><circle cx="39.1" cy="26.3" r=".6" fill="#fff"/> <path d="M29.5 19Q32 15.5 34.5 19" fill="none" stroke="#E6CFA0" stroke-width="2" stroke-linecap="round"/> <ellipse cx="32" cy="43.5" rx="10.5" ry="7.5" fill="#F4B9A6"/> <ellipse cx="28.3" cy="41.5" rx="1.5" ry="2.1" fill="#B35F52"/><ellipse cx="35.7" cy="41.5" rx="1.5" ry="2.1" fill="#B35F52"/> <path d="M26.5 47Q32 50.5 37.5 47" fill="none" stroke="#A8574B" stroke-width="1.5" stroke-linecap="round"/> <g fill="none" stroke-linecap="round"><path d="M36.5 47.6Q45 46 53 39" stroke="#8FE0A8" stroke-width="2.6"/><path d="M36.5 48.4Q46 50.5 55 47" stroke="#4DB878" stroke-width="2.6"/><path d="M36.8 48Q43 44.5 49 43" stroke="#B5F0C6" stroke-width="2"/></g> </svg>'
 )
 
 
@@ -324,7 +348,7 @@ def _hero():
         '<a class="btn ghost" href="#" data-goto="Log in">I have an account</a></div></div>'
     )
     insight = (
-        f'<div class="g insight"><div class="ih"><span>{icon("leaf", "1.2rem")} Farm snapshot</span><em>Example data</em></div>'
+        f'<div class="g insight" data-tilt><div class="ih"><span>{icon("leaf", "1.2rem")} Farm snapshot</span><em>Example data</em></div>'
         '<div class="irow"><div class="l"><span>Milk today</span><b>38 L</b></div><div class="bar"><i style="width:76%"></i></div></div>'
         '<div class="irow"><div class="l"><span>Feed cost per litre</span><b>KES 17</b></div><div class="bar am"><i style="width:40%"></i></div></div>'
         '<div class="irow"><div class="l"><span>Left after feed, per litre</span><b>KES 26</b></div><div class="bar"><i style="width:62%"></i></div></div>'
@@ -352,16 +376,28 @@ def _head(eyebrow, title, sub="", anchor=None):
     return f'<div class="sec"{a}><div class="eyebrow">{eyebrow}</div><h2>{title}</h2>{s}</div>'
 
 
+def _flip(front, back, label):
+    return (
+        f'<div class="flipc" tabindex="0" role="button" aria-label="{label}" data-tilt><div class="fi">{front}{back}</div></div>'
+    )
+
+
 def _steps():
     items = [
-        ("notebook", "Log your day", "Record the milk and what you fed, in the buckets, bags or bales you really use."),
-        ("cross", "Ask and book", "Request the vet, choose AI semen from your route vet's price list, book vaccination days."),
-        ("bell", "Hear what matters", "Get an outbreak alert, or one short SMS about one feed, only when the records are clear."),
+        ("notebook", "Log your day", "Record the milk and what you fed, in the buckets, bags or bales you really use.",
+         "3 buckets of napier mixed with hay, one 50 kg bag of dairy meal, and 38 litres of milk. A minute, and it is done."),
+        ("cross", "Ask and book", "Request the vet, choose AI semen from your route vet's price list, book vaccination days.",
+         "Tap Ask the vet, pick the day you want, and choose semen from your own route vet's list. The vet sees it straight away."),
+        ("bell", "Hear what matters", "Get an outbreak alert, or one short SMS about one feed, only when the records are clear.",
+         "Maziwa Plus: OUTBREAK: Foot and mouth near Tigoni. Keep cows in. Call your vet."),
     ]
-    return "".join(
-        f'<div class="g step"><div class="num">{i}</div><div class="tileic{" amb" if i == 2 else ""}">{icon(ic)}</div><h3>{t}</h3><p>{p}</p></div>'
-        for i, (ic, t, p) in enumerate(items, 1)
-    )
+    out = ""
+    for i, (ic, t, p, eg) in enumerate(items, 1):
+        front = (f'<div class="g step front"><div class="num">{i}</div><div class="tileic{" amb" if i == 2 else ""}">{icon(ic)}</div>'
+                 f'<h3>{t}</h3><p>{p}</p><span class="hint">{icon("check", "0.9rem")} Tap for an example</span></div>')
+        back = f'<div class="g step back"><h3>For example</h3><p class="eg">{eg}</p><span class="hint">Tap to flip back</span></div>'
+        out += _flip(front, back, f"{t}: tap to see an example")
+    return out
 
 
 def _dash():
@@ -382,7 +418,7 @@ def _dash():
         + f'</ul><a class="btn main" href="#" data-goto="Sign up">Create my account {icon("check", "1.2rem")}</a></div>'
     )
     right = (
-        '<div class="g win"><div class="bar0"><i></i><i></i><i></i><span style="margin-left:.4rem">Farm overview</span><em>Example data</em></div>'
+        '<div class="g win" data-tilt><div class="bar0"><i></i><i></i><i></i><span style="margin-left:.4rem">Farm overview</span><em>Example data</em></div>'
         '<div class="tiles3"><div class="mini"><span>Milk today</span><b>38 <small>L</small></b></div>'
         '<div class="mini"><span>Feed cost</span><b><small>KES</small> 646</b></div>'
         '<div class="mini"><span>Left after feed</span><b><small>KES</small> 988</b></div></div>'
@@ -392,7 +428,7 @@ def _dash():
 
 
 def _tile(ic, title, text, cls="", amb=False):
-    return f'<div class="g tile {cls}"><div class="tileic{" amb" if amb else ""}">{icon(ic)}</div><h3>{title}</h3><p>{text}</p></div>'
+    return f'<div class="g tile {cls}" data-tilt><div class="tileic{" amb" if amb else ""}">{icon(ic)}</div><h3>{title}</h3><p>{text}</p></div>'
 
 
 def _bento():
@@ -418,17 +454,24 @@ def _bento():
 
 def _roles():
     items = [
-        ("cow-sky.jpg", "A farm cow looking happily at the camera", "Farmers",
-         "See what is left after feed and semen, keep herd records, and reach your vet without phone tag."),
-        ("calves.jpg", "Calves standing together in a field", "Vets",
-         "Open one sheet with today's farms, each visit and what to carry. Keep your own priced semen list."),
+        ("farmer-milking.jpg", "A farmer in a straw hat milking a cow into a bucket in a green pasture", "Farmers",
+         "See what is left after feed and semen, keep herd records, and reach your vet without phone tag.",
+         ["Log milk and feed every day", "See your margin per litre", "Ask the vet and book vaccination days", "Get alerts by SMS"], "center 55%"),
+        ("vet-check.jpg", "A vet listening to a cow's side with a stethoscope", "Vets",
+         "Open one sheet with today's farms, each visit and what to carry. Keep your own priced semen list.",
+         ["See today's farms on one sheet", "Keep your own semen price list", "Mark visits as done", "See each request from ask to done"], "center 35%"),
         ("milk-can.jpg", "Fresh milk being poured into a milk can", "Milk buyers",
-         "Set up routes, send alerts to the farms that need them, and see which visits were attended."),
+         "Set up routes, send alerts to the farms that need them, and see which visits were attended.",
+         ["Approve farmers and vets", "Set up routes and route admins", "Send outbreak alerts to chosen routes", "See which visits were attended"], "center"),
     ]
-    return "".join(
-        f'<div class="g role"><img src="{IMG}{f}" alt="{a}" loading="lazy"><div class="rb"><h3>{t}</h3><p>{p}</p></div></div>'
-        for f, a, t, p in items
-    )
+    out = ""
+    for f, a, t, p, bullets, pos in items:
+        front = (f'<div class="g role front"><img src="{IMG}{f}" alt="{a}" loading="lazy" style="object-position:{pos}"><div class="rb">'
+                 f'<h3>{t}</h3><p>{p}</p><span class="hint">{icon("check", "0.9rem")} Tap to see what you can do</span></div></div>')
+        lis = "".join(f"<li>{icon('check', '1.1rem')}{b}</li>" for b in bullets)
+        back = f'<div class="g role back"><h3>{t}</h3><ul>{lis}</ul><span class="hint">Tap to flip back</span></div>'
+        out += _flip(front, back, f"{t}: tap to see what you can do")
+    return out
 
 
 def _sdgs():
