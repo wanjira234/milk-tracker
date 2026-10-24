@@ -4,6 +4,7 @@ from datetime import date, timedelta
 import streamlit as st
 
 from src import accounts, db, services
+from src.onboarding import checklist, next_step
 from src.ingestion.manual_entry import normalize_phone
 from src.ui import cap, farmer_selector
 from src.auth import require_login
@@ -66,7 +67,27 @@ if farmers:
     week = db.daily_yield(farmer_id, today - timedelta(days=6), today)
     todays = next((r for r in week if r["log_date"] == today), None)
 
+    steps = checklist(
+        db.get_milk_price(farmer_id),
+        db.list_cows(farmer_id),
+        db.cows_in_milk_on(farmer_id, today),
+        db.list_catalogue(farmer_id),
+        db.daily_yield(farmer_id, today - timedelta(days=365), today),
+    )
+    upcoming = next_step(steps)
+    if upcoming:
+        finished = sum(1 for item in steps if item[4])
+        with st.container(border=True):
+            st.subheader("Get started")
+            st.caption(f"{finished} of {len(steps)} steps done. Each takes about a minute, and you can do them in any order.")
+            st.progress(finished / len(steps))
+            for key, label, why, page, ok in steps:
+                mark = "✅" if ok else ("👉" if key == upcoming[0] else "⬜")
+                st.markdown(f"{mark} **{label}**" + ("" if ok else f" — {why}"))
+            st.page_link(upcoming[3], label=f"Next: {upcoming[1]}", icon="➡️")
+
     c1, c2 = st.columns(2)
     c1.metric("Milk today (litres)", f"{float(todays['litres']):.1f}" if todays else "no entry")
     c2.metric("Last 7 days (litres)", f"{sum(float(r['litres']) for r in week):.1f}")
-    st.write("Use **feed log** in the sidebar to record milkings and feed.")
+    if not upcoming:
+        st.write("Use **Feed log** in the menu each day to record milkings and feed.")

@@ -115,6 +115,7 @@ def test_each_role_gets_its_own_menu_and_every_page_is_reachable_by_someone():
     assert "Ask the vet" in labels("farmer") and "Admin" not in labels("farmer") and "My day" not in labels("farmer")
     assert "My day" in labels("vet") and "Ask the vet" not in labels("vet") and "Admin" not in labels("vet")
     assert "Admin" in labels("admin") and "Attendance" in labels("admin") and "My day" not in labels("admin")
+    assert labels("farmer")[:3] == ["Home", "Feed log", "Dashboard"] and labels("farmer")[-1] == "Account"  # daily jobs first
     farm_pages = {"Dashboard", "Feed log", "Budget", "Farm setup", "Cows"}
     assert not farm_pages & set(labels("admin")), "an admin sees a farm only by logging in as that farmer"
     assert farm_pages <= set(labels("farmer")) and not farm_pages & set(labels("vet"))

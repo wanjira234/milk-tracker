@@ -144,12 +144,14 @@ def _tab_email():
 def _tab_signup():
     from src import accounts
 
-    st.caption("Sign up here. An admin must approve you before you can log in.")
+    st.caption("Three quick steps: sign up here, the milk buyer's admin approves you, then log in on the Email & password tab.")
+    role = st.radio("I am a", ["farmer", "vet"], horizontal=True, key="su_role")  # outside the form so the fields change
     with st.form("signup", clear_on_submit=True):
-        role = st.radio("I am a", ["farmer", "vet"], horizontal=True, key="su_role")
         name = st.text_input("Your name", key="su_name")
-        phone = st.text_input("Phone (needed for farmers)", placeholder="0712 345 678", key="su_phone")
-        farm = st.text_input("Farm name (farmers)", key="su_farm")
+        phone = farm = None
+        if role == "farmer":
+            phone = st.text_input("Phone", placeholder="0712 345 678", key="su_phone", help="Your SMS advice and alerts come to this number.")
+            farm = st.text_input("Farm name (optional)", key="su_farm")
         email = st.text_input("Email", key="su_email")
         pw = st.text_input("Choose a password (at least 8 characters)", type="password", key="su_pw")
         if st.form_submit_button("Sign up", type="primary"):
@@ -158,7 +160,12 @@ def _tab_signup():
             except ValueError as e:
                 st.error(str(e)[:1].upper() + str(e)[1:] + ".")
             else:
-                st.success("Thank you. An admin will approve your signup. Then log in with your email and password.")
+                st.success(
+                    "You are signed up. The admin has to approve you before you can log in. "
+                    "Once approved, log in on the Email & password tab. "
+                    + ("Your Home page will then guide you through setting up your farm." if role == "farmer"
+                       else "Your My day page will show your route's visits.")
+                )
 
 
 def _tab_owner(expected):
@@ -198,11 +205,12 @@ def _force_password_change(user):
 # This is tidiness, not security: every page still checks the role itself (require_login(roles=...))
 # and the data is filtered by role.
 _COMMON = [("pages/11_alerts.py", "Alerts"), ("pages/12_vaccination.py", "Vaccination")]
-_FARM_DATA = [("pages/1_dashboard.py", "Dashboard"), ("pages/2_feed_log.py", "Feed log"), ("pages/3_budget.py", "Budget"),
-              ("pages/4_farm_setup.py", "Farm setup"), ("pages/5_cows.py", "Cows")]
 _ACCOUNT = [("pages/6_account.py", "Account")]
 MENU = {
-    "farmer": [("app.py", "Home"), ("pages/9_ask_the_vet.py", "Ask the vet")] + _COMMON + _FARM_DATA + _ACCOUNT,
+    # Daily jobs first, then the vet and notices; the set-up pages come last because the Home checklist leads there.
+    "farmer": [("app.py", "Home"), ("pages/2_feed_log.py", "Feed log"), ("pages/1_dashboard.py", "Dashboard"),
+               ("pages/9_ask_the_vet.py", "Ask the vet")] + _COMMON
+              + [("pages/5_cows.py", "Cows"), ("pages/3_budget.py", "Budget"), ("pages/4_farm_setup.py", "Farm setup")] + _ACCOUNT,
     # The vet works from My day; a farm's dashboard and cow records are the farmer's own view.
     "vet": [("app.py", "Home"), ("pages/8_my_day.py", "My day")] + _COMMON + _ACCOUNT,
     # The admin runs the business and sees no farm-data pages: to see a farmer's view, log in as that farmer.

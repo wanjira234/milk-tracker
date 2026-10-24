@@ -296,3 +296,18 @@ def test_a_vet_sees_only_route_farms_and_the_home_page_is_a_visit_overview():
     at.run()
     assert not at.exception and not at.sidebar.selectbox  # no farm picker: the vet's home is about visits
     assert [m.label for m in at.metric] == ["Visits today", "Done", "Waiting for a day"]
+
+
+def test_a_new_farmer_home_shows_the_get_started_steps_and_a_finished_farm_does_not():
+    fid = db.add_farmer("Sim", "+254700000001", "Sim Farm")
+    at = page("app.py")
+    assert not at.exception
+    text = " ".join(m.value for m in at.markdown)
+    assert "Get started" in " ".join(h.value for h in at.subheader) and "Set your milk price" in text
+    db.set_milk_price(fid, 50)
+    db.add_cow(fid, "Wanjiku")
+    db.set_cows_in_milk(fid, date.today(), 1)
+    db.upsert_catalogue_item(fid, "napier", "bucket", 15, 100)
+    db.upsert_yield(fid, date.today(), "morning", 10)
+    at = page("app.py")
+    assert not at.exception and not [h for h in at.subheader if h.value == "Get started"]
