@@ -169,11 +169,19 @@ def _tab_signup():
 
 
 def _tab_owner(expected):
+    from src import accounts
+
+    locked = accounts.owner_locked_message()
+    if locked:
+        st.error(locked)
+        return
     with st.form("owner_login"):
         entered = st.text_input("Owner password", type="password", key="owner_password")
         if st.form_submit_button("Log in", type="primary"):
             if password_ok(entered, expected):
+                accounts.owner_login_ok()
                 _log_in(dict(OWNER_USER))
+            accounts.owner_login_failed()
             _wrong()
             st.error("Wrong password.")
 

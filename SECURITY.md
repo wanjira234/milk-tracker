@@ -11,6 +11,7 @@ What is protected, how, and what is not done yet. The application-level items un
 
 **Passwords and login codes**
 - Passwords are hashed with scrypt (N=2^14, r=8, p=1, random salt per password) from the standard library. The settings are stored with each hash so they can be raised later. Minimum 8 characters; trivial digit strings are refused.
+- The shared owner password has one lockout for everyone: five wrong tries from any browser lock the owner login for 15 minutes. Prefer individual admin logins and set the owner password to a long random value.
 - Five wrong passwords lock the account for 15 minutes, and the lock is stored in the database, so reloading the page does not reset it. A browser session also stops after five wrong tries.
 - Unknown emails take the same time as wrong passwords (a dummy hash is checked), and the error never says whether an email exists. The one exception is a correct password on a sign-up that is still waiting for approval.
 - SMS login codes are 6 digits, single-use, valid for 10 minutes, limited to 5 tries, one per minute and five per hour. They are stored as an HMAC-SHA256 with a per-code salt, never in clear.
@@ -30,6 +31,8 @@ What is protected, how, and what is not done yet. The application-level items un
 - Alerts are texted only after a preview and a confirmation, once per alert (claimed in the database first, so a double click cannot text everyone twice), and only to the farms the alert is for. Texts that would not fit in two segments or use characters outside the basic SMS alphabet are refused. Every message, sent or failed, is logged.
 - The AI only rewords advice. The numbers and the feed name come from the model, and any rewording that changes them, promises a result, adds a link or breaks the length limit is rejected and a plain template is sent instead.
 - Page content is never built from user input as HTML: the only `unsafe_allow_html` use is fixed styling.
+
+See [docs/SSDLC.md](docs/SSDLC.md) for the risk assessment, threat model and testing by development stage.
 
 ## Not done yet
 

@@ -157,6 +157,30 @@ def locked_message(raw_email, now=None):
     return None
 
 
+def owner_locked_message(now=None):
+    """The owner password is one shared secret, so wrong guesses count against everyone together:
+    5 wrong tries lock the owner login for 15 minutes, however many browsers are used."""
+    now = now or _now()
+    state = db.owner_lockout()
+    if state["locked_until"] and now < state["locked_until"]:
+        minutes = int((state["locked_until"] - now).total_seconds() // 60) + 1
+        return f"Too many wrong tries. The owner login is locked for about {minutes} minute(s). Use an admin email or SMS login."
+    return None
+
+
+def owner_login_failed(now=None):
+    now = now or _now()
+    state = db.owner_lockout()
+    failed = state["failures"] + 1
+    db.set_owner_lockout(failed, now + LOCKOUT if failed >= MAX_FAILED_LOGINS else None)
+
+
+def owner_login_ok():
+    state = db.owner_lockout()
+    if state["failures"] or state["locked_until"]:
+        db.set_owner_lockout(0, None)
+
+
 def set_password(user_id, new_password, email=None):
     """Set (or change) a password, and optionally the email to use with it."""
     check_strength(new_password)

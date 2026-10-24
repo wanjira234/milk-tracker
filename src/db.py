@@ -354,6 +354,18 @@ def delete_route(route_id):
     _query("DELETE FROM routes WHERE id = %s", (route_id,))
 
 
+def owner_lockout():
+    return _query("SELECT failures, locked_until FROM owner_lockout WHERE id = 1", one=True) or {"failures": 0, "locked_until": None}
+
+
+def set_owner_lockout(failures, locked_until):
+    _query(
+        "INSERT INTO owner_lockout (id, failures, locked_until) VALUES (1, %s, %s) "
+        "ON CONFLICT (id) DO UPDATE SET failures = EXCLUDED.failures, locked_until = EXCLUDED.locked_until",
+        (failures, locked_until),
+    )
+
+
 def farmer_by_phone(phone):
     return _query("SELECT * FROM farmers WHERE phone = %s", (phone,), one=True)
 

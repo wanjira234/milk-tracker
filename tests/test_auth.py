@@ -43,6 +43,14 @@ def no_admin_phone(monkeypatch):
     monkeypatch.delenv("ADMIN_PHONE", raising=False)
 
 
+@pytest.fixture(autouse=True)
+def no_owner_lockout_database(monkeypatch):
+    """These tests run without a database; the shared owner lockout is tested against one in test_accounts_db."""
+    monkeypatch.setattr("src.accounts.owner_locked_message", lambda *a, **k: None)
+    monkeypatch.setattr("src.accounts.owner_login_failed", lambda *a, **k: None)
+    monkeypatch.setattr("src.accounts.owner_login_ok", lambda *a, **k: None)
+
+
 @pytest.mark.parametrize("page", PAGES)
 def test_every_page_offers_the_logins_and_never_touches_the_database(monkeypatch, page):
     monkeypatch.setenv("APP_PASSWORD", "open-sesame")
