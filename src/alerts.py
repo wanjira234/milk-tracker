@@ -27,7 +27,7 @@ def routes_of(user):
 
 
 def sms_text(kind, title, body):
-    """The SMS for an alert: 'Milk Tracker: OUTBREAK: <title>. <body>' as plain single-line text."""
+    """The SMS for an alert: 'Maziwa Plus: OUTBREAK: <title>. <body>' as plain single-line text."""
     label = "OUTBREAK" if kind == "outbreak" else "Notice"
     title = normalize(title).rstrip(".")
     return normalize(f"{APP_NAME}: {label}: {title}. {body}")

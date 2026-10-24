@@ -1,6 +1,7 @@
 """The public pages a visitor sees before logging in: Home, About us and Contact us.
 
 Everything here is fixed text, except the contact form, which only stores what it is given."""
+import html
 import os
 import time
 
@@ -10,7 +11,7 @@ import streamlit.components.v1 as components
 from src import contact
 from src.messages import APP_NAME
 
-IMG = "/app/static/img/"  # served by Streamlit static serving (see static/README.md)
+IMG = "app/static/img/"  # relative on purpose: Streamlit Cloud serves the app under a prefix, so a leading slash would miss the files
 HERO_VIDEO = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "hero.mp4")
 
 PUBLIC_CSS = (
@@ -25,6 +26,27 @@ PUBLIC_CSS = (
     ".land a.btn.ghost{border:2px solid #FFF8EA;color:#FFF8EA}"
     ".land a.btn.ghost:hover{background:rgba(255,248,234,.15)}"
     ".land a.btn.dark{background:#0F2E20;color:#FFF8EA}"
+    # top bar
+    ".topbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.6rem 1.5rem;padding:.2rem 0 1.1rem}"
+    ".topbar a{text-decoration:none;cursor:pointer}"
+    ".brand{display:flex;align-items:center;gap:.7rem;color:#0F2E20}"
+    ".brand svg{width:3.1rem;height:3.1rem;flex:none}"
+    ".brand .bn{font-family:'Fredoka',sans-serif;font-weight:600;font-size:1.9rem;line-height:1;color:#0F2E20}"
+    ".brand .bn b{color:#D98A0B;font-weight:600}"
+    ".nav{display:flex;gap:.3rem;flex-wrap:wrap}"
+    ".nav a{color:#1B2B22;font-weight:500;font-size:1.1rem;padding:.65rem 1.1rem;border-radius:999px;min-height:2.75rem;box-sizing:border-box}"
+    ".nav a:hover{background:#E4EFE2;color:#0F2E20}"
+    # footer
+    ".foot2{background:#0F2E20;color:#E8F1EA;border-radius:28px;padding:2.4rem 2.4rem 1.2rem;margin:2.5rem 0 1rem}"
+    ".fgrid{display:grid;grid-template-columns:1.6fr 1fr 1fr 1.2fr;gap:2rem}"
+    ".foot2 h4{font-family:'Fredoka',sans-serif;color:#F2A93B;font-weight:600;font-size:1.05rem;margin:0 0 .7rem;letter-spacing:.04em}"
+    ".foot2 a{display:block;color:#E8F1EA;text-decoration:none;padding:.3rem 0;cursor:pointer}"
+    ".foot2 a.brand{display:flex;padding:0}"
+    ".foot2 a:hover{color:#F2A93B;text-decoration:underline}"
+    ".foot2 p{margin:.4rem 0;color:#B8D3C2;line-height:1.5}"
+    ".foot2 .brand .bn{color:#FFF8EA}.foot2 .brand .bn b{color:#F2A93B}"
+    ".fbot{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.4rem 1.5rem;border-top:1px solid rgba(255,248,234,.2);"
+    "margin-top:1.6rem;padding-top:1rem;font-size:.88rem;color:#B8D3C2}"
     # hero
     ".hero{position:relative;display:grid;grid-template-columns:1.15fr .85fr;min-height:30rem;border-radius:28px;"
     "overflow:hidden;background:#0F2E20;color:#FFF8EA}"
@@ -76,13 +98,13 @@ PUBLIC_CSS = (
     ".cta{background:linear-gradient(135deg,#0F2E20 0%,#1F5A3A 100%);color:#FFF8EA;border-radius:28px;padding:2.6rem 2rem;text-align:center;margin:3rem 0 1rem}"
     ".cta h2{font-size:2.2rem;margin-bottom:.4rem !important}"
     ".cta p{color:#E8F1EA;font-size:1.1rem;margin:0 0 1.2rem}"
-    ".foot{text-align:center;color:#5A6A60;font-size:.9rem;padding:1rem 0 2rem}"
-    ".small{color:#5A6A60;font-size:.9rem}"
+        ".small{color:#5A6A60;font-size:.9rem}"
     ".card{background:#FFFFFF;border:2px solid #E8DCC0;border-radius:20px;padding:1.25rem 1.25rem 1rem;height:100%}"
     ".card h4{margin:.1rem 0 .4rem;color:#0F2E20}"
     ".card p{color:#3F5247;margin:0}"
     ".banner{width:100%;height:14rem;object-fit:cover;border-radius:24px;display:block;margin-bottom:1rem}"
     "@media (max-width:760px){"
+    ".fgrid{grid-template-columns:1fr 1fr}.foot2{padding:1.6rem 1.3rem 1rem}.nav a{padding:.6rem .8rem}.brand .bn{font-size:1.6rem}"
     ".hero,.band,.feat{grid-template-columns:1fr}"
     ".hero .txt{padding:2rem 1.4rem}.hero h1{font-size:2.3rem}"
     ".hero .pic{height:15rem;order:-1}"
@@ -107,6 +129,56 @@ GOTO_JS = (
 )
 
 
+LOGO_SVG = (
+    '<svg viewBox="0 0 64 64" role="img" aria-label="Maziwa Plus logo" xmlns="http://www.w3.org/2000/svg">'
+    '<circle cx="32" cy="32" r="30" fill="#1F5A3A" stroke="#F2A93B" stroke-width="3"/>'
+    '<path d="M32 11C32 11 17 27 17 38a15 15 0 0 0 30 0C47 27 32 11 32 11z" fill="#FFF8EA"/>'
+    '<rect x="30" y="31" width="4" height="15" rx="1.5" fill="#F2A93B"/><rect x="24.5" y="36.5" width="15" height="4" rx="1.5" fill="#F2A93B"/></svg>'
+)
+
+
+def _run_script(script):
+    """Run a fixed script in a tiny hidden frame. st.iframe replaces components.html on newer Streamlit."""
+    doc = f"<!doctype html><html><body>{script}</body></html>"
+    if hasattr(st, "iframe"):
+        st.iframe(doc, height=1)
+    else:
+        components.html(doc, height=0)
+
+
+def _brand():
+    return f'<a class="brand" href="#" data-goto="Home">{LOGO_SVG}<span class="bn">Maziwa <b>Plus</b></span></a>'
+
+
+def render_header():
+    """Logo and the three page links above the pages. Log in and Sign up have their own big buttons on the Home page
+    and in the footer, so they are not repeated here."""
+    st.markdown(PUBLIC_CSS, unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="land"><div class="topbar">{_brand()}<nav class="nav" aria-label="Main">'
+        '<a href="#" data-goto="Home">Home</a><a href="#" data-goto="About us">About us</a>'
+        '<a href="#" data-goto="Contact us">Contact us</a></nav></div></div>',
+        unsafe_allow_html=True,
+    )
+    _run_script(GOTO_JS)
+
+
+def render_footer():
+    email, phone = os.environ.get("CONTACT_EMAIL", "").strip(), os.environ.get("CONTACT_PHONE", "").strip()
+    lines = "".join(f"<p>{html.escape(x)}</p>" for x in (email, phone) if x) or "<p>Send us a message and we will reply.</p>"
+    st.markdown(
+        f'<div class="land"><footer class="foot2"><div class="fgrid"><div>{_brand()}'
+        "<p>Know what your feed is worth.</p><p>Karibu. A tool for farmers, vets and milk buyers.</p></div>"
+        '<div><h4>Explore</h4><a href="#" data-goto="Home">Home</a><a href="#" data-goto="About us">About us</a>'
+        '<a href="#" data-goto="Contact us">Contact us</a></div>'
+        '<div><h4>Get started</h4><a href="#" data-goto="Sign up">Create an account</a><a href="#" data-goto="Log in">Log in</a></div>'
+        f'<div><h4>Contact</h4>{lines}<a href="#" data-goto="Contact us">Write to us</a></div></div>'
+        '<div class="fbot"><span>© 2026 HustleWindow</span>'
+        "<span>Built for the FNB App of the Year hackathon. Demo data is simulated.</span></div></footer></div>",
+        unsafe_allow_html=True,
+    )
+
+
 def _cards(items, steps=False):
     cols = st.columns(len(items))
     for i, (col, (title, text)) in enumerate(zip(cols, items), start=1):
@@ -127,7 +199,7 @@ def _hero():
     if has_video:
         media = (
             f'<video autoplay muted loop playsinline preload="metadata" poster="{IMG}hero-cow.jpg" aria-hidden="true">'
-            '<source src="/app/static/hero.mp4" type="video/mp4"></video>'
+            '<source src="app/static/hero.mp4" type="video/mp4"></video>'
         )
         return f'<div class="hero vid">{media}{txt}</div>'
     pic = f'<div class="pic"><img src="{IMG}hero-cow.jpg" alt="A curious brown cow looking into the camera"></div>'
@@ -223,10 +295,10 @@ def render_home():
         "<p>Sign up takes a minute. Farmers, vets and milk-buyer admins each get their own view.</p>"
         '<a class="btn main" href="#" data-goto="Sign up">Create my account</a>'
         '<a class="btn ghost" href="#" data-goto="Contact us">Talk to us</a></div>'
-        f'<div class="foot">{APP_NAME} · HustleWindow · Karibu</div></div>',
+        "</div>",
         unsafe_allow_html=True,
     )
-    components.html(GOTO_JS, height=0)
+    render_footer()
 
 
 def render_about():
@@ -254,6 +326,7 @@ def render_about():
         "- **AI:** Claude only rewords advice that the app has already worked out. It is never sent your name or phone number.\n"
         "- **Demo data:** the demo farms are simulated, not real people."
     )
+    render_footer()
 
 
 def render_contact():
@@ -279,3 +352,4 @@ def render_contact():
                 else:
                     st.session_state["contact_last"] = time.time()
                     st.success("Thank you. We have your message and will reply to the contact you gave.")
+    render_footer()

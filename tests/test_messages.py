@@ -132,7 +132,7 @@ def test_a_typical_english_advice_sms_is_one_segment_and_the_longest_fit_in_two(
 # --- the check on a rewording --------------------------------------------------------
 
 F = facts_from_decision(advice())  # increase dairy meal, 0.4 kg, 10%, KES 15
-GOOD = "Milk Tracker: dairy meal is paying on your farm. Add 0.4 kg more a day (10% more) and keep logging. At least KES 15 a day."
+GOOD = "Maziwa Plus: dairy meal is paying on your farm. Add 0.4 kg more a day (10% more) and keep logging. At least KES 15 a day."
 
 
 def problems(text, facts=F):
@@ -169,7 +169,7 @@ def test_the_check_catches_what_a_model_might_get_wrong(text, expected):
 
 
 def test_smart_punctuation_is_normalised_not_rejected():
-    fancy = "Milk Tracker: dairy meal is paying on your farm. Add 0.4 kg more a day (10% more) – keep logging. At least KES 15 a day. Don’t stop."
+    fancy = "Maziwa Plus: dairy meal is paying on your farm. Add 0.4 kg more a day (10% more) – keep logging. At least KES 15 a day. Don’t stop."
     assert problems(fancy) == []
     assert normalize("it’s “ok” — yes…\n\n done") == 'it\'s "ok" - yes... done'
 
@@ -177,12 +177,12 @@ def test_smart_punctuation_is_normalised_not_rejected():
 def test_a_thousands_separator_is_one_number():
     assert _numbers_in("KES 1,500 and 12,345.5") == [1500.0, 12345.5]
     f = facts_from_decision(advice(gain=1500))
-    assert problems("Milk Tracker: dairy meal pays. Add 0.4 kg more a day (10% more). Worth at least KES 1,500 a day.", f) == []
+    assert problems("Maziwa Plus: dairy meal pays. Add 0.4 kg more a day (10% more). Worth at least KES 1,500 a day.", f) == []
 
 
 def test_opposite_direction_is_caught_in_swahili_too():
     f = facts_from_decision(advice("increase"), "sw")
-    bad = "Milk Tracker: punguza dairy meal kwa 0.4 kg kwa siku (10%). Faida angalau KES 15."
+    bad = "Maziwa Plus: punguza dairy meal kwa 0.4 kg kwa siku (10%). Faida angalau KES 15."
     assert any("opposite" in p for p in check_message(bad, f))
 
 
@@ -193,11 +193,11 @@ def test_a_decrease_message_may_not_say_more():
 
 def test_a_direction_word_inside_the_feed_name_is_not_a_false_alarm():
     f = facts_from_decision(advice("decrease", feed="extra protein mix"))
-    assert check_message("Milk Tracker: less extra protein mix saves money. Try 0.4 kg less a day (10% less). Saves at least KES 15.", f) == []
+    assert check_message("Maziwa Plus: less extra protein mix saves money. Try 0.4 kg less a day (10% less). Saves at least KES 15.", f) == []
 
 
 def test_extra_numbers_are_allowed_but_not_required():
     f = facts_from_decision(nudge(FEW_DAYS))
-    assert check_message("Milk Tracker: please log 5 more days with the feed.", f) == []          # '3 milkings' dropped: fine
-    assert check_message("Milk Tracker: please log 5 more days with all 3 milkings and the feed.", f) == []
-    assert any("not in the facts" in p for p in check_message("Milk Tracker: please log 7 more days.", f))
+    assert check_message("Maziwa Plus: please log 5 more days with the feed.", f) == []          # '3 milkings' dropped: fine
+    assert check_message("Maziwa Plus: please log 5 more days with all 3 milkings and the feed.", f) == []
+    assert any("not in the facts" in p for p in check_message("Maziwa Plus: please log 7 more days.", f))
