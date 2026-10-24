@@ -10,7 +10,7 @@ from src.ui import cap, farmer_selector
 from src.auth import require_login
 
 st.set_page_config(page_title="Feed log", page_icon="🥛", layout="centered")
-require_login()
+require_login(roles=("farmer",))
 st.title("Feed log")
 
 farmer_id = farmer_selector()

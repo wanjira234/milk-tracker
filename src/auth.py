@@ -205,8 +205,9 @@ MENU = {
     "farmer": [("app.py", "Home"), ("pages/9_ask_the_vet.py", "Ask the vet")] + _COMMON + _FARM_DATA + _ACCOUNT,
     "vet": [("app.py", "Home"), ("pages/8_my_day.py", "My day")] + _COMMON
            + [("pages/1_dashboard.py", "Dashboard"), ("pages/5_cows.py", "Cows")] + _ACCOUNT,
+    # The admin runs the business and sees no farm-data pages: to see a farmer's view, log in as that farmer.
     "admin": [("app.py", "Home"), ("pages/7_admin.py", "Admin"), ("pages/10_attendance.py", "Attendance")] + _COMMON
-             + _FARM_DATA + _ACCOUNT,
+             + _ACCOUNT,
 }
 HIDE_BUILT_IN_NAV_CSS = '<style>[data-testid="stSidebarNav"]{display:none}</style>'
 

@@ -26,7 +26,12 @@ def clean(monkeypatch):
 
 def page(name):
     at = AppTest.from_file(os.path.join(ROOT, name), default_timeout=30)
-    at.session_state["user"] = dict(OWNER_USER)
+    if name.startswith("pages/7_"):  # the admin page is the owner's; farm pages are a farmer's own view
+        at.session_state["user"] = dict(OWNER_USER)
+    else:
+        farm = db.list_farmers()[0]
+        at.session_state["user"] = {"id": None, "role": "farmer", "name": farm["name"],
+                                    "farmer_id": farm["id"], "must_change_password": False}
     return at.run()
 
 

@@ -38,9 +38,19 @@ def add_farmer_form():
 
 farmers = accounts.visible_farmers(user)
 if user["role"] == "admin":
-    with st.expander("Add a farmer", expanded=not farmers):
+    # The admin's home is a business overview, not a farm's: farm pages belong to the farmer's own login.
+    routes = db.list_routes()
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Farmers", len(farmers))
+    c2.metric("Routes", len(routes))
+    c3.metric("Vets", len(db.list_users("vet")))
+    c4.metric("Signups waiting", len(db.list_pending_users()))
+    st.write("Use **Admin** for routes, vets and sign-ups, **Attendance** for today's visits, "
+             "and **Alerts** or **Vaccination** to notify farmers.")
+    with st.expander("Add a farmer without a login", expanded=not farmers):
         add_farmer_form()
-elif not farmers:
+    st.stop()
+if not farmers:
     st.info("No farm is linked to your login yet. Ask your admin.")
 if farmers:
     farmer_id = farmer_selector()

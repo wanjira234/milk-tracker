@@ -15,7 +15,7 @@ from src.ui import cap, farmer_selector
 from src.auth import require_login
 
 st.set_page_config(page_title="Farm setup", page_icon="🥛", layout="centered")
-require_login()
+require_login(roles=("farmer",))
 st.title("Farm setup")
 st.caption("Set these up once, and update them when prices or the herd change.")
 
