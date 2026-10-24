@@ -1,5 +1,5 @@
 """Cows: calves, heifers and cows; breeding (heat, service, in calf, calving, dry period);
-mothers and calves; the semen the farm can choose from; and deworming."""
+mothers and calves; the semen the route vet offers; and deworming."""
 from datetime import date
 
 import streamlit as st
@@ -14,7 +14,6 @@ from src.ingestion.manual_entry import (
     record_cow,
     record_cows_in_milk,
     record_deworming,
-    record_semen,
     record_weaning,
 )
 from src.ui import cap, farmer_selector
@@ -42,7 +41,8 @@ if "flash" in st.session_state:
     getattr(st, level)(message)
 
 animals = db.list_cows(farmer_id)
-semen = db.list_semen(farmer_id)
+vet_id = db.route_vet_id(farmer_id)
+vet_semen = db.list_vet_semen(vet_id) if vet_id else []  # the farmer picks from the route vet's list, never their own
 events = db.breeding_events(farmer_id)
 worming = db.dewormings(farmer_id)
 events_by_cow = {}
@@ -111,11 +111,11 @@ else:
     semen_id = calf_tag = None
     calf_sex = "female"
     if kind == "served":
-        if semen:
-            options = {s["id"]: s["name"] for s in semen}
+        if vet_semen:
+            options = {v["id"]: f"{v['name']} (KES {float(v['price_kes']):,.0f})" for v in vet_semen}
             semen_id = st.selectbox("Semen used", list(options), format_func=options.get, key="ev_semen")
         else:
-            st.caption("Add the semen you can choose from in the list below, then pick it here.")
+            st.caption("Your route vet has not listed any semen yet, so this is saved without one.")
     if kind == "calved":
         calf_tag = st.text_input("Name or tag of the calf (optional)", key="ev_calf_tag")
         calf_sex = st.radio("The calf is", ["female", "male"], horizontal=True, key="ev_calf_sex")
@@ -127,6 +127,8 @@ else:
                 extra = f" Calf {done['calf']['tag']} added, with {names[cow_id]} as her mother." if done["calf"] else ""
                 flash(f"Saved: {names[cow_id]} calved on {ev_date}.{extra} Update cows in milk if it changed.")
             else:
+                if semen_id is not None:  # the vet's semen becomes the farm's own record under the same name
+                    semen_id = db.add_semen(farmer_id, next(v["name"] for v in vet_semen if v["id"] == semen_id))
                 record_breeding_event(farmer_id, cow_id, ev_date, kind, semen_id)
                 flash(f"Saved: {names[cow_id]}, {KINDS[kind].lower()}, {ev_date}.")
         except ValueError as e:
@@ -207,20 +209,12 @@ if animals:
     st.caption("Removing hides her from the lists. Her history is kept.")
 
 st.divider()
-st.subheader("Semen you can choose from")
-st.caption("The bulls or breeds your AI service offers. Name them the way you would say them, for example 'Friesian - Kamau'.")
-s1, s2 = st.columns([3, 1], vertical_alignment="bottom")
-new_semen = s1.text_input("Bull name or breed", key="new_semen")
-if s2.button("Add", key="add_semen"):
-    try:
-        saved = record_semen(farmer_id, new_semen)
-        flash(f"Added {saved['name']}.")
-    except ValueError as e:
-        st.error(cap(e))
-if semen:
-    st.write(", ".join(s["name"] for s in semen))
-    t1, t2 = st.columns([3, 1], vertical_alignment="bottom")
-    drop = t1.selectbox("Stop offering", [s["id"] for s in semen], format_func={s["id"]: s["name"] for s in semen}.get, index=None, placeholder="Choose semen", key="drop_pick")
-    if t2.button("Remove", key="rm_semen", disabled=drop is None):
-        db.retire_semen(farmer_id, drop)
-        st.rerun()
+st.subheader("Semen your vet offers")
+if not vet_id:
+    st.caption("You are not on a route with a vet yet. Ask your admin.")
+elif not vet_semen:
+    st.caption("Your route vet has not listed any semen yet.")
+else:
+    st.caption("Set by your route vet. Pick from this list when you record a service or ask for AI.")
+    for v in vet_semen:
+        st.write(f"- {v['name']}: KES {float(v['price_kes']):,.0f}")
