@@ -50,6 +50,17 @@ def price_per_kg(total_price, kg):
     return price / _positive(kg, "total kg")
 
 
+def load_buckets(days, buckets_per_day):
+    """Buckets in a load that is used up over `days` days at `buckets_per_day` a day.
+
+    A truck load is rarely weighed or counted when it is offloaded; it is fed out in buckets over days,
+    so the buckets are worked out from how long it lasted."""
+    buckets = _positive(days, "days") * _positive(buckets_per_day, "buckets a day")
+    if buckets > 100_000:
+        raise ValueError("that is a lot of buckets; check the numbers")
+    return buckets
+
+
 def breakdown(total_price, kg, bucket_kg=None):
     """Price per kg and per measure. Returns rows {"measure","unit","kg","kes"}, cheapest-first
     ordering not applied: measures stay in the same order so the table doesn't jump around."""

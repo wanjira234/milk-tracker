@@ -42,6 +42,8 @@ def widget(at, kind, key):
 def test_the_calculator_saves_a_truck_load_as_a_price_per_mtungi():
     fid = db.add_farmer("Sim", "+254700000001", "Sim Farm")
     at = page("pages/4_farm_setup.py")
+    widget(at, "radio", "calc_how").set_value("I counted it in measures")
+    at.run()
     widget(at, "text_input", "calc_name").set_value("napier")
     widget(at, "number_input", "calc_price").set_value(15000)
     widget(at, "selectbox", "calc_counted").select("big mtungi (about 20 kg)")
@@ -56,9 +58,29 @@ def test_the_calculator_saves_a_truck_load_as_a_price_per_mtungi():
     assert float(item["kg_per_unit"]) == 20 and float(item["kes_per_unit"]) == 100
 
 
+def test_a_truck_load_fed_in_buckets_is_priced_per_bucket():
+    fid = db.add_farmer("Sim", "+254700000001", "Sim Farm")
+    at = page("pages/4_farm_setup.py")  # the default way of counting is the truck load fed out in buckets
+    widget(at, "text_input", "calc_name").set_value("napier")
+    widget(at, "number_input", "calc_price").set_value(5000)
+    widget(at, "number_input", "calc_days").set_value(10)
+    widget(at, "number_input", "calc_perday").set_value(5)
+    at.run()
+    assert not at.exception and any("KES 100 a bucket" in m.value for m in at.markdown)  # 50 buckets
+    assert not any(b.key == "calc_save" for b in at.button)  # no kg yet, so nothing to save
+    widget(at, "number_input", "calc_bucket").set_value(15)
+    at.run()
+    assert any("One bucket of napier costs about KES 100" in m.value for m in at.markdown)
+    widget(at, "button", "calc_save").click().run()
+    item = db.list_catalogue(fid)[0]
+    assert item["unit"] == "bucket" and float(item["kg_per_unit"]) == 15 and float(item["kes_per_unit"]) == 100
+
+
 def test_the_calculator_refuses_a_save_with_no_feed_name():
     db.add_farmer("Sim", "+254700000001")
     at = page("pages/4_farm_setup.py")
+    widget(at, "radio", "calc_how").set_value("I counted it in measures")
+    at.run()
     widget(at, "number_input", "calc_price").set_value(15000)
     widget(at, "number_input", "calc_count").set_value(150)
     at.run()
