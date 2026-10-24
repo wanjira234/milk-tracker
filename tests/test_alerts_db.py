@@ -106,11 +106,11 @@ def test_a_farm_with_no_route_sees_only_the_all_route_alerts(world):
 
 def test_the_sms_text_is_plain_labelled_and_fits_two_segments():
     text = alerts.sms_text("outbreak", "Foot and mouth near Tigoni.", "Keep cows in.   Call your vet.")
-    assert text == "Milk Tracker: OUTBREAK: Foot and mouth near Tigoni. Keep cows in. Call your vet."
+    assert text == "Maziwa Plus: OUTBREAK: Foot and mouth near Tigoni. Keep cows in. Call your vet."
     assert alerts.sms_problem(text) is None
     assert "too long" in alerts.sms_problem(alerts.sms_text("notice", "T", "x" * 400))
-    assert "alphabet" in alerts.sms_problem("Milk Tracker: Notice: cows \U0001F404 are safe")
-    assert alerts.sms_text("notice", "Vaccine day", "Bring your cows.").startswith("Milk Tracker: Notice: Vaccine day.")
+    assert "alphabet" in alerts.sms_problem("Maziwa Plus: Notice: cows \U0001F404 are safe")
+    assert alerts.sms_text("notice", "Vaccine day", "Bring your cows.").startswith("Maziwa Plus: Notice: Vaccine day.")
 
 
 def test_sending_texts_only_the_farms_on_that_route_and_logs_each_message(world):
@@ -118,7 +118,7 @@ def test_sending_texts_only_the_farms_on_that_route_and_logs_each_message(world)
     fake = FakeSms()
     assert alerts.send_alert_sms(aid, world["admin"], client=fake) == {"ok": 2, "failed": 0}
     assert sorted(to for _, to in fake.sent) == ["+254700000001", "+254700000002"]  # 4A only
-    assert all(m.startswith("Milk Tracker: OUTBREAK:") for m, _ in fake.sent)
+    assert all(m.startswith("Maziwa Plus: OUTBREAK:") for m, _ in fake.sent)
     a = db.get_alert(aid)
     assert a["sms_ok"] == 2 and a["sms_failed"] == 0 and a["sms_sent_at"] is not None
     log = db.sms_outbox()

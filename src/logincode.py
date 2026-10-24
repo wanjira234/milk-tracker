@@ -46,4 +46,4 @@ def may_send(recent_created_at, now):
 
 
 def message(code):
-    return f"Milk Tracker: your login code is {code}. It works for 10 minutes. Do not share it."
+    return f"Maziwa Plus: your login code is {code}. It works for 10 minutes. Do not share it."

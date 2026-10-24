@@ -63,20 +63,12 @@ LOGGED_OUT_CSS = (
     '[data-testid="stSidebar"],[data-testid="stSidebarCollapsedControl"],[data-testid="stExpandSidebarButton"]'
     "{display:none}"
     ".block-container{max-width:1120px;padding-top:2rem}"
+    # The page links live in our own top bar; hide only the outer tab strip (not the Email / SMS tabs inside Log in).
+    '[data-testid="stTabs"]:not([data-testid="stTabs"] [data-testid="stTabs"]) > div > [role="tablist"]{display:none}'
     # Large touch targets and 16px text in the boxes (a smaller size makes phones zoom in on focus).
     "button[kind],[data-testid='stFormSubmitButton'] button{min-height:3rem}"
     "input{font-size:16px !important}"
-    ".welcome{display:flex;flex-wrap:wrap;align-items:baseline;gap:.2rem .8rem;padding:0 .25rem 1rem}"
-    ".welcome .hello{color:#B8741A;font-weight:700;letter-spacing:.12em;text-transform:uppercase;font-size:.8rem}"
-    ".welcome .name{font-family:Fredoka,sans-serif;font-size:1.6rem;font-weight:600;color:#0F2E20}"
-    ".welcome .promise{color:#3F5247;font-size:1rem}"
     "</style>"
-)
-# Fixed text only: nothing a visitor types is ever put into this block.
-WELCOME_HTML = (
-    '<div class="welcome"><span class="hello">Karibu</span>'
-    f'<span class="name">{APP_NAME}</span>'
-    '<span class="promise">Know what your feed is worth.</span></div>'
 )
 TAGLINE = "Know what your feed is worth."
 
@@ -278,14 +270,14 @@ def require_login(roles=None):
     user = current_user()
     if not user:
         st.markdown(LOGGED_OUT_CSS, unsafe_allow_html=True)
-        st.markdown(WELCOME_HTML, unsafe_allow_html=True)
+        from src import public_site
+
+        public_site.render_header()
         if st.session_state.pop("account_deleted", False):
             st.success("Your account and its records have been deleted.")
         if _too_many():
             st.error("Too many wrong tries. Reload the page to try again.")
             st.stop()
-        from src import public_site
-
         top = ["Home", "Log in", "Sign up", "About us", "Contact us"]
         t_home, t_login, t_signup, t_about, t_contact = st.tabs(top)
         with t_home:
@@ -297,9 +289,11 @@ def require_login(roles=None):
                 for tab, name in zip(st.tabs(methods), methods):
                     with tab:
                         {"SMS code": _tab_sms, "Email & password": _tab_email}.get(name, lambda: _tab_owner(owner_pw))()
+            public_site.render_footer()
         with t_signup:
             with st.columns([1, 3, 1])[1]:
                 _tab_signup()
+            public_site.render_footer()
         with t_about:
             public_site.render_about()
         with t_contact:
