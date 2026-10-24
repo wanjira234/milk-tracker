@@ -71,7 +71,13 @@ src/breeding.py             Where each cow is in her cycle (heat, served, in cal
 src/herd.py                 Cards for calf / heifer / cow with family lines; milking vs dry count
 src/auth.py                 Login screen (SMS code, email+password, or owner APP_PASSWORD = admin); require_login(roles=None) returns the user; every page calls require_login() right after set_page_config (APP_PASSWORD / ADMIN_PHONE in .env or Streamlit secrets; both unset = locked)
 src/accounts.py             Users, roles (admin/vet/farmer), routes, SMS codes, lockout, visible_farmers(user)
-pages/6_account.py, 7_admin.py  My login; admin: routes, vets, farm-to-route, create logins
+pages/6_account.py, 7_admin.py  My login; admin: routes, vets, farm-to-route, create logins, sign-up approval
+src/services.py             Service requests (AI, sick cow, other, vaccination): farmer asks, route vet schedules/completes, carry list, day sheet, admin attendance; AI completion records the service on the cow and the semen cost
+src/alerts.py               Outbreak alerts and notices: who may post, who sees them, one-time confirmed SMS send, SMS outbox
+src/vaccinations.py         Vaccination days: post, book animals (becomes a vaccination visit on the vet's day sheet), cancel
+src/demo_seed.py            `python -m src.demo_seed`: demo admin, vet and farmer with simulated data (asks to confirm the database host; use a separate demo database)
+pages/8_my_day.py (vet), 9_ask_the_vet.py (farmer), 10_attendance.py (admin), 11_alerts.py, 12_vaccination.py   Role pages; menus per role live in src/auth.py (MENU)
+README.md, SECURITY.md      For judges and readers: what it is, architecture, what is protected and what is not
 src/loader.py               Loads one farmer's data, runs the model and rules; `python -m src.loader FARMER_ID` prints the result
 src/messages.py             Decision -> SMS facts, plain template (en; sw is a DRAFT), and the check that rejects a reworded SMS
 src/llm.py                  Claude (Haiku) rewords the template; falls back to the template on any problem
