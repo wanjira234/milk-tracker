@@ -34,3 +34,12 @@ def test_running_it_twice_changes_nothing_and_the_farm_has_enough_data_for_the_m
     farm = db.farmer_by_phone(demo_seed.DEMO_FARM_PHONE)
     result = loader.assess_farmer(farm["id"], date.today())
     assert result["usable_days"] >= 14
+
+
+def test_the_seed_command_asks_first_and_writes_nothing_unless_told_to(capsys):
+    assert demo_seed.main(ask=lambda prompt: "no") == 1
+    assert db.list_users() == [] and "Cancelled" in capsys.readouterr().out
+    assert demo_seed.main(ask=lambda prompt: " Demo ") == 0
+    assert len(db.list_users()) == 3
+    out = capsys.readouterr().out
+    assert "localhost" in out and "milk" not in out.split("database at:")[1].split("\n")[0]  # host shown, no password

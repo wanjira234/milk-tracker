@@ -292,3 +292,26 @@ CREATE TABLE IF NOT EXISTS service_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_requests_farm   ON service_requests (farmer_id, status);
 CREATE INDEX IF NOT EXISTS idx_requests_status ON service_requests (status, scheduled_for);
+
+-- ---------------------------------------------------------------------------
+-- Alerts (outbreaks and notices) and the SMS outbox. An alert goes to one route's farmers or to
+-- every route (route_id NULL). Sending it by SMS is a separate, one-time action, recorded here so
+-- it can never be sent twice by accident.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS alerts (
+    id                 SERIAL PRIMARY KEY,
+    kind               TEXT NOT NULL CHECK (kind IN ('outbreak', 'notice')),
+    title              TEXT NOT NULL,
+    body               TEXT NOT NULL,
+    route_id           INTEGER REFERENCES routes(id) ON DELETE CASCADE,   -- NULL = all routes
+    created_by_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_on         DATE,
+    sms_sent_at        TIMESTAMPTZ,
+    sms_ok             INTEGER NOT NULL DEFAULT 0,
+    sms_failed         INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_alerts_route ON alerts (route_id, created_at);
+
+ALTER TABLE sms_log DROP CONSTRAINT IF EXISTS sms_log_kind_check;
+ALTER TABLE sms_log ADD CONSTRAINT sms_log_kind_check CHECK (kind IN ('advice', 'nudge', 'alert', 'other'));

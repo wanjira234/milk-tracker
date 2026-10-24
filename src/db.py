@@ -689,3 +689,66 @@ def semen_cost(farmer_id, start, end):
         (farmer_id, start, end), one=True,
     )
     return float(row["kes"]), int(row["n"])
+
+
+# --- alerts and the SMS outbox -------------------------------------------------------------------
+
+ALERT_SELECT = """
+    SELECT a.id, a.kind, a.title, a.body, a.route_id, a.created_by_user_id, a.created_at, a.expires_on,
+           a.sms_sent_at, a.sms_ok, a.sms_failed, r.code AS route_code, u.name AS author
+    FROM alerts a LEFT JOIN routes r ON r.id = a.route_id LEFT JOIN users u ON u.id = a.created_by_user_id
+"""
+
+
+def add_alert(kind, title, body, route_id, created_by_user_id, expires_on=None):
+    return _query(
+        "INSERT INTO alerts (kind, title, body, route_id, created_by_user_id, expires_on) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+        (kind, title, body, route_id, created_by_user_id, expires_on), one=True,
+    )["id"]
+
+
+def get_alert(alert_id):
+    return _query(ALERT_SELECT + " WHERE a.id = %s", (alert_id,), one=True)
+
+
+def list_alerts(today, route_ids=None, limit=50):
+    """Alerts still in force on `today`, newest first. route_ids=None means every route (admin);
+    otherwise only alerts for those routes plus the ones sent to all routes."""
+    sql = ALERT_SELECT + " WHERE (a.expires_on IS NULL OR a.expires_on >= %s)"
+    args = [today]
+    if route_ids is not None:
+        sql += " AND (a.route_id IS NULL OR a.route_id = ANY(%s))"
+        args.append(list(route_ids))
+    return _query(sql + " ORDER BY a.created_at DESC, a.id DESC LIMIT %s", (*args, limit))
+
+
+def claim_alert_sms(alert_id):
+    """Mark the alert's SMS as sent-now. True only for the first caller, so a double click can't text everyone twice."""
+    return _query(
+        "UPDATE alerts SET sms_sent_at = now() WHERE id = %s AND sms_sent_at IS NULL RETURNING id", (alert_id,), one=True
+    ) is not None
+
+
+def set_alert_sms_counts(alert_id, ok, failed):
+    _query("UPDATE alerts SET sms_ok = %s, sms_failed = %s WHERE id = %s", (ok, failed, alert_id))
+
+
+def farmers_for_alert(route_id):
+    """Active farms with a phone on one route, or on every route when route_id is None."""
+    sql = "SELECT id, name, farm_name, phone, route_id FROM farmers WHERE active AND phone IS NOT NULL"
+    args = ()
+    if route_id is not None:
+        sql += " AND route_id = %s"
+        args = (route_id,)
+    return _query(sql + " ORDER BY id", args)
+
+
+def sms_outbox(farmer_ids=None, limit=50):
+    """Messages the system sent (or tried to), newest first. farmer_ids=None means every farm."""
+    sql = ("SELECT s.id, s.farmer_id, f.name AS farmer_name, s.body, s.status, s.kind, s.sent_at "
+           "FROM sms_log s JOIN farmers f ON f.id = s.farmer_id")
+    args = []
+    if farmer_ids is not None:
+        sql += " WHERE s.farmer_id = ANY(%s)"
+        args.append(list(farmer_ids))
+    return _query(sql + " ORDER BY s.sent_at DESC, s.id DESC LIMIT %s", (*args, limit))
