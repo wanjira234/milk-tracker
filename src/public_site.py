@@ -3,6 +3,7 @@
 Everything here is fixed text, except the contact form, which only stores what it is given. Log in and Sign up are
 separate views that the big buttons open (the tab strip itself is hidden by src.auth)."""
 import html
+import re
 import os
 import time
 
@@ -296,6 +297,27 @@ LOGO_SVG = (
 )
 
 
+_AUTH_BUTTON = re.compile(r'<a class="btn (?:main|ghost)" href="#" data-goto="(?:Sign up|Log in)">.*?</a>', re.S)
+_GET_STARTED_COL = re.compile(r'<div><h4>Get started</h4>.*?</div>', re.S)
+
+
+def is_member():
+    """True when someone is logged in and is looking at the public pages (Website in the menu)."""
+    return bool(st.session_state.get("user"))
+
+
+def _clean(markup):
+    """For a logged-in visitor the Sign up / Log in buttons make no sense: take them out."""
+    if not is_member():
+        return markup
+    markup = _GET_STARTED_COL.sub('<div><h4>Your account</h4><p>You are signed in.</p></div>', markup)
+    return _AUTH_BUTTON.sub("", markup)
+
+
+def _md(markup, unsafe_allow_html=True):
+    st.markdown(_clean(markup), unsafe_allow_html=True)
+
+
 def _run_script(script):
     """Run a fixed script in a tiny hidden frame. st.iframe replaces components.html on newer Streamlit."""
     doc = f"<!doctype html><html><body>{script}</body></html>"
@@ -315,9 +337,19 @@ def _nav_link(label, anchor=None):
 
 
 def render_header():
-    """Frosted top bar with the logo and the page links. Log in and Sign up have their own big buttons below."""
-    st.markdown(PUBLIC_CSS, unsafe_allow_html=True)
-    st.markdown(
+    """Frosted top bar with the logo and the page links. Log in and Sign up have their own big buttons below.
+    For someone logged in, a 'Back to my home' pill sits at the right instead."""
+    _md(PUBLIC_CSS)
+    if is_member():
+        _md(
+            "<style>.st-key-backhome{position:fixed;top:.6rem;right:1.2rem;left:auto !important;width:auto !important;z-index:100001}.st-key-backhome>div,.st-key-backhome [data-testid='stElementContainer']{width:auto !important}"
+            ".st-key-backhome a{background:#F2A93B !important;border-radius:999px !important;padding:.4rem 1rem !important;color:#1B2B22 !important}"
+            ".st-key-backhome a *{color:#1B2B22 !important;font-weight:700}"
+            ".land .topbar .nav{margin-right:11rem}@media (max-width:760px){.land .topbar .nav{margin-right:0}.st-key-backhome{top:3.7rem;right:.8rem}}</style>"
+        )
+        with st.container(key="backhome"):
+            st.page_link("app.py", label="Back to my home")
+    _md(
         f'<div class="land"><div class="topbar"><div class="topin">{_brand()}<nav class="nav" aria-label="Main">'
         + _nav_link("How it works", "how")
         + _nav_link("About us", "about")
@@ -331,7 +363,7 @@ def render_header():
 def render_footer():
     email, phone = os.environ.get("CONTACT_EMAIL", "").strip(), os.environ.get("CONTACT_PHONE", "").strip()
     lines = "".join(f"<p>{html.escape(x)}</p>" for x in (email, phone) if x) or "<p>Send us a message and we will reply.</p>"
-    st.markdown(
+    _md(
         f'<div class="land"><footer class="bleed foot2"><div class="wrap"><div class="fgrid"><div>{_brand()}'
         "<p>Know what your feed is worth.</p><p>Karibu. A tool for farmers, vets and milk buyers.</p></div>"
         '<div><h4>Explore</h4><a href="#" data-goto="Home">Home</a>' + _nav_link("How it works", "how")
@@ -345,7 +377,7 @@ def render_footer():
 
 
 def page_title(title, text):
-    st.markdown(f'<div class="land"><div class="ptitle"><h2>{title}</h2><p>{text}</p></div></div>', unsafe_allow_html=True)
+    _md(f'<div class="land"><div class="ptitle"><h2>{title}</h2><p>{text}</p></div></div>')
 
 
 def _hero():
@@ -600,8 +632,8 @@ def _contact_form():
 
 def render_home():
     """The whole public page, top to bottom, on one dark background."""
-    st.markdown('<div class="land">' + _hero() + "</div>", unsafe_allow_html=True)
-    st.markdown(
+    _md('<div class="land">' + _hero() + "</div>")
+    _md(
         '<div class="land"><div class="wrap">' + _head("How it works", "Three steps, a few minutes a day", anchor="how")
         + f'<div class="grid3">{_steps()}</div>' + _dash()
         + _head("What you get", "Everything a dairy farm runs on, in one place", "Built around the way smallholders really feed and farm.")
@@ -615,19 +647,19 @@ def render_home():
         + f'<div class="grid3">{_roles()}</div></div></div>',
         unsafe_allow_html=True,
     )
-    st.markdown(_sdgs(), unsafe_allow_html=True)
-    st.markdown(_about_html(), unsafe_allow_html=True)
-    st.markdown('<div class="land"><div class="wrap">' + _head("Questions", "Before you sign up") + "</div></div>", unsafe_allow_html=True)
+    _md(_sdgs())
+    _md(_about_html())
+    _md('<div class="land"><div class="wrap">' + _head("Questions", "Before you sign up") + "</div></div>")
     for q, a in FAQ:
         with st.expander(q):
             st.write(a)
-    st.markdown('<div class="land"><div class="wrap">' + _head("Contact us", "We would love to hear from you", anchor="contact") + "</div></div>", unsafe_allow_html=True)
+    _md('<div class="land"><div class="wrap">' + _head("Contact us", "We would love to hear from you", anchor="contact") + "</div></div>")
     left, right = st.columns([5, 6], gap="large")
     with left:
-        st.markdown(_contact_info_html(), unsafe_allow_html=True)
+        _md(_contact_info_html())
     with right:
         _contact_form()
-    st.markdown(
+    _md(
         '<div class="land"><div class="wrap"><div class="cta"><img src="' + IMG + 'farmer-feeding.jpg" alt="" loading="lazy"><div>'
         "<h2>Ready to see what your feed is worth?</h2>"
         "<p>Sign up takes a minute. Farmers, vets and milk-buyer admins each get their own view.</p>"

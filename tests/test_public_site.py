@@ -44,3 +44,20 @@ def test_click_handlers_are_built_in_the_main_page_so_they_survive_the_helper_fr
     js = public_site.GOTO_JS
     assert "P.Function" in js and "function install()" in js  # not left inside the tiny frame that Streamlit removes on a page change
     assert "var p=window,d=document" in js  # inside install, window/document are the main page's
+
+
+def test_website_page_in_every_role_menu():
+    from src.auth import menu_for
+    for role in ("farmer", "vet", "admin"):
+        assert any(p == "pages/13_website.py" for p, _ in menu_for(role)), role
+
+
+def test_clean_strips_auth_buttons_for_members(monkeypatch):
+    import streamlit as st
+    from src import public_site
+    html = '<a class="btn main" href="#" data-goto="Sign up">Sign up</a><p>keep</p>'
+    monkeypatch.setattr(st, 'session_state', {})
+    assert public_site._clean(html) == html
+    monkeypatch.setattr(st, 'session_state', {'user': {'id': 1}})
+    out = public_site._clean(html)
+    assert 'Sign up' not in out and 'keep' in out
