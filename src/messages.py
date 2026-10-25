@@ -14,7 +14,7 @@ import math
 import re
 
 from src.sms import MAX_SEGMENTS, gsm_length, sms_segments
-from src.suggestions import MAX_STEP
+from src.limits import MAX_STEP
 
 APP_NAME = "Maziwa Plus"
 ICON = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "static", "img", "logo.png")  # browser-tab icon

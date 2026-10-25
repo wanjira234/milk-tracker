@@ -7,11 +7,11 @@ honest answer is usually "not enough evidence yet".
 """
 import numpy as np
 import pandas as pd
-from scipy import stats
+
+from src.limits import MIN_COMPLETE_DAYS  # noqa: F401  (also read as models.MIN_COMPLETE_DAYS)
 
 WINDOW_DAYS = 90          # lactation stage and season drift, so old days stop being relevant
 LAG_DAYS = 2              # milk responds over 2-3 days: use the feed averaged over today and the 2 days before
-MIN_COMPLETE_DAYS = 14    # days with all milkings, cows in milk known, and feed logged
 MIN_DISTINCT_LEVELS = 3   # the amount of the feed must have varied: a constant ration says nothing
 LEVEL_GAP = 0.10          # amounts within 10% of each other count as the same level
 CONFIDENCE = 0.95
@@ -154,6 +154,8 @@ def feed_effects(
         fitted.append((out, float(beta[2]), float(se[2]), df))
 
     # Split the error budget across the feeds tested (Bonferroni), then judge each one.
+    from scipy import stats  # loaded here: slow to import, and only the advice maths needs it
+
     used = 1 - (1 - confidence) / max(len(fitted), 1)
     for out, slope, se, df in fitted:
         crit = stats.t.ppf(1 - (1 - used) / 2, df)
