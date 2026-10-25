@@ -108,8 +108,8 @@ def _tab_sms():
 
     st.caption("We text a 6-digit code to your phone.")
     with st.form("sms_login"):
-        phone = st.text_input("Phone number", placeholder="0712 345 678", key="sms_phone")
-        entered = st.text_input("Code (after you get it)", key="sms_code", max_chars=8)
+        phone = st.text_input("Phone number", placeholder="0712 345 678", key="sms_phone", autocomplete="tel")
+        entered = st.text_input("Code (after you get it)", key="sms_code", max_chars=8, autocomplete="one-time-code")
         c1, c2 = st.columns(2)
         ask = c1.form_submit_button("Send me a code")
         go = c2.form_submit_button("Log in", type="primary")
@@ -132,8 +132,8 @@ def _tab_email():
     from src import accounts
 
     with st.form("email_login"):
-        email = st.text_input("Email", key="login_email")
-        password = st.text_input("Password", type="password", key="login_password")
+        email = st.text_input("Email", key="login_email", autocomplete="username")
+        password = st.text_input("Password", type="password", key="login_password", autocomplete="current-password")
         go = st.form_submit_button("Log in", type="primary")
     if go:
         try:
@@ -159,7 +159,7 @@ def _second_factor_screen(pending):
     public_site.page_title("One more step", "Open your authenticator app and type the 6-digit code for Maziwa Plus.")
     with st.columns([1, 3, 1])[1], st.container(border=True):
         with st.form("second_factor"):
-            code = st.text_input("6-digit code", max_chars=7, key="second_factor_code")
+            code = st.text_input("6-digit code", max_chars=7, key="second_factor_code", autocomplete="one-time-code")
             go = st.form_submit_button("Verify", type="primary")
         if go:
             if accounts.verify_totp_login(pending["id"], code):
@@ -180,13 +180,13 @@ def _tab_signup():
     st.caption("Three quick steps: sign up here, the milk buyer's admin approves you, then log in on the Email & password tab.")
     role = st.radio("I am a", ["farmer", "vet"], horizontal=True, key="su_role")  # outside the form so the fields change
     with st.form("signup", clear_on_submit=True):
-        name = st.text_input("Your name", key="su_name")
+        name = st.text_input("Your name", key="su_name", autocomplete="name")
         phone = farm = None
         if role == "farmer":
             phone = st.text_input("Phone", placeholder="0712 345 678", key="su_phone", help="Your SMS advice and alerts come to this number.")
             farm = st.text_input("Farm name (optional)", key="su_farm")
-        email = st.text_input("Email", key="su_email")
-        pw = st.text_input("Choose a password (at least 8 characters)", type="password", key="su_pw")
+        email = st.text_input("Email", key="su_email", autocomplete="username")
+        pw = st.text_input("Choose a password (at least 8 characters)", type="password", key="su_pw", autocomplete="new-password")
         if st.form_submit_button("Sign up", type="primary"):
             try:
                 accounts.signup(role, name, email, pw, phone or None, farm or None)
@@ -209,7 +209,7 @@ def _tab_owner(expected):
         st.error(locked)
         return
     with st.form("owner_login"):
-        entered = st.text_input("Owner password", type="password", key="owner_password")
+        entered = st.text_input("Owner password", type="password", key="owner_password", autocomplete="current-password")
         if st.form_submit_button("Log in", type="primary"):
             if password_ok(entered, expected):
                 accounts.owner_login_ok()
@@ -225,9 +225,9 @@ def _force_password_change(user):
     st.title("Choose your own password")
     st.write("You are using a temporary password. Choose one only you know.")
     with st.form("change_password"):
-        email = st.text_input("Your email (you will log in with this)", key="cp_email")
-        new = st.text_input("New password (at least 8 characters)", type="password", key="cp_new")
-        again = st.text_input("New password again", type="password", key="cp_again")
+        email = st.text_input("Your email (you will log in with this)", key="cp_email", autocomplete="username")
+        new = st.text_input("New password (at least 8 characters)", type="password", key="cp_new", autocomplete="new-password")
+        again = st.text_input("New password again", type="password", key="cp_again", autocomplete="new-password")
         if st.form_submit_button("Save password", type="primary"):
             try:
                 if new != again:
