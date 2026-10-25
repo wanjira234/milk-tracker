@@ -60,8 +60,11 @@ pip install -r requirements.txt
 cp .env.example .env                     # then fill in your values (never commit .env)
 psql "$DATABASE_URL" -f sql/schema.sql   # on Supabase: SQL editor, then "Run and enable RLS"
 streamlit run app.py
-python -m src.demo_seed                  # demo admin, vet and farmer with 40 days of simulated data
+python -m src.demo_seed                  # demo admin, vet, a farmer with 40 days of simulated data, and a second farm one day short of advice
+python -m src.demo_seed --reset-fresh    # put that second farm back to its 15 simulated days (judges add to it)
 ```
+
+Set `DEMO_PASSWORD` in your shell first if you want all the demo logins to share one password you choose. The second farm (`newfarm@demo.milk`) has 15 simulated days and yesterday left empty: log yesterday's milk and feed (pick yesterday's date) and its 14th usable day unlocks the model. Running the seed again only adds what is missing, so it is safe on an existing demo database.
 
 The seed asks you to type `demo` and shows the database host before it writes anything. Use a **separate** demo database. In the SMS tab, codes only reach real phones once Africa's Talking is on a live account; until then use the email and password tab (the demo logins) or the Africa's Talking sandbox simulator.
 
