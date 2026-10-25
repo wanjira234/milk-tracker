@@ -418,12 +418,35 @@ def render_topbar(user, role):
         pass
 
 
+def loader_css():
+    """While the app is working (loading a page, saving a form): a thin progress bar across the top and our cow bobbing
+    in the corner, instead of Streamlit's small 'Running...' label. Pure CSS, keyed on Streamlit's own running flag."""
+    from urllib.parse import quote
+
+    from src import public_site
+
+    cow = "data:image/svg+xml;utf8," + quote(public_site.LOGO_SVG)
+    return (
+        "<style>"
+        '[data-testid="stStatusWidget"]{display:none !important}'
+        '.stApp[data-test-script-state="running"]::before{content:"";position:fixed;top:0;left:0;height:4px;width:100%;z-index:100000;'
+        "background:linear-gradient(90deg,#2A6F46,#F2A93B,#2A6F46);background-size:200% 100%;animation:ldbar 1.1s linear infinite}"
+        '.stApp[data-test-script-state="running"]::after{content:"";position:fixed;right:1.1rem;bottom:1.1rem;width:3.4rem;height:3.4rem;z-index:100000;'
+        f'background:url("{cow}") center/contain no-repeat;border-radius:50%;box-shadow:0 10px 24px rgba(0,0,0,.35);animation:ldbob .9s ease-in-out infinite}}'
+        "@keyframes ldbar{from{background-position:200% 0}to{background-position:0 0}}"
+        "@keyframes ldbob{0%,100%{transform:translateY(0) rotate(-4deg)}50%{transform:translateY(-9px) rotate(4deg)}}"
+        "@media (prefers-reduced-motion:reduce){.stApp[data-test-script-state=\"running\"]::before,.stApp[data-test-script-state=\"running\"]::after{animation:none !important}}"
+        "</style>"
+    )
+
+
 def require_login(roles=None):
     """Show the login screen and stop the page until someone is logged in; returns the user.
 
     `roles`: if given, only these roles may see the page (others are told so and stopped).
     """
     configure_admin_phone()
+    st.markdown(loader_css(), unsafe_allow_html=True)
     owner_pw = configured_password()
     if not owner_pw and not os.environ.get("ADMIN_PHONE") and not st.session_state.get("user"):
         st.error("This app is locked: no password has been set. Set APP_PASSWORD (see README).")

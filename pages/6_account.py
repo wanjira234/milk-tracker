@@ -34,8 +34,10 @@ with st.form("set_password", clear_on_submit=True):
             st.error(cap(e))
 
 st.subheader("Two-factor login (extra protection)")
-if not row["email"] or not db.get_user(user["id"]):
+if not row["email"]:
     st.caption("Set an email and password above first.")
+elif not accounts.totp_available(user["id"]):
+    st.info("Two-factor login is not switched on for this site yet. The site owner needs to run the database update (the four `ALTER TABLE users ... totp ...` lines in `sql/schema.sql`) first.")
 elif accounts.totp_required(user["id"]):
     st.success("Two-factor login is ON. After your password you also type a 6-digit code from your authenticator app.")
     with st.form("totp_off", clear_on_submit=True):
@@ -50,8 +52,12 @@ else:
     st.write("Add a second step to your login: even if someone learns your password, they also need your phone. "
              "Use any authenticator app (Google Authenticator, Microsoft Authenticator, Authy).")
     if st.button("Set up two-factor", key="totp_begin"):
-        accounts.begin_totp_setup(user["id"])
-        st.rerun()
+        try:
+            accounts.begin_totp_setup(user["id"])
+        except ValueError as e:
+            st.error(cap(e))
+        else:
+            st.rerun()
     pending = db.get_totp(user["id"])
     if pending and pending["secret"] and not pending["enabled"]:
         from src import totp

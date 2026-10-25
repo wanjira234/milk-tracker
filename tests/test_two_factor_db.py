@@ -99,6 +99,9 @@ def test_the_app_still_works_if_the_two_factor_columns_do_not_exist_yet(uid, mon
 
     monkeypatch.setattr(db, "_query", boom)
     assert db.get_totp(uid) is None and not accounts.totp_required(uid)
+    assert not accounts.totp_available(uid)
+    with pytest.raises(ValueError, match="not switched on"):
+        accounts.begin_totp_setup(uid)  # a plain message, not a database traceback
 
 
 def test_login_screen_asks_for_the_code_after_the_password_and_lets_the_right_code_in(uid, monkeypatch):

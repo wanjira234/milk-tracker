@@ -225,8 +225,15 @@ def totp_required(user_id):
     return bool(t and t["enabled"] and t["secret"])
 
 
+def totp_available(user_id):
+    """False when the database has no two-factor columns yet (sql/schema.sql not re-run), so the page can say so plainly."""
+    return db.get_totp(user_id) is not None
+
+
 def begin_totp_setup(user_id):
     """Make a fresh key (not yet active) and return it. Active only once a code from the app is confirmed."""
+    if not totp_available(user_id):
+        raise ValueError("two-factor login is not switched on for this site yet: the database needs its update first")
     secret = totp.new_secret()
     db.set_totp(user_id, totp_secret=secret, totp_enabled=False, totp_last_step=None, totp_failed=0)
     return secret

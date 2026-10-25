@@ -172,3 +172,12 @@ def test_login_screen_has_the_cow_card_and_a_logged_in_page_gets_the_top_bar(mon
     assert "st-key-topbar" in auth.TOPBAR_CSS and auth.TOPBAR_SHOWN >= 3
     for role in ("farmer", "vet", "admin", "route_admin"):
         assert auth.menu_for(role)[0][1] == "Home"  # Home is always the first link on the bar
+
+
+def test_loader_css_shows_a_bar_and_the_cow_only_while_the_script_runs_and_hides_the_small_running_label():
+    from src import auth
+
+    css = auth.loader_css()
+    assert 'data-test-script-state="running"' in css and "::before" in css and "::after" in css
+    assert "data:image/svg+xml" in css and "stStatusWidget" in css and "prefers-reduced-motion" in css
+    assert css.count("xmlns=") == 1 or "xmlns%3D" in css  # the logo is embedded once, with a single namespace
