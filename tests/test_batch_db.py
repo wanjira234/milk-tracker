@@ -67,7 +67,7 @@ def test_the_shared_connection_is_released_afterwards(connects):
 
 def test_the_demo_seed_runs_on_a_single_connection_and_leaves_nothing_behind_if_it_fails(connects, monkeypatch):
     assert demo_seed.main(ask=lambda p: "demo") == 0
-    assert len(connects) == 1 and len(db.list_users()) == 3 and len(db.list_farmers()) == 1
+    assert len(connects) == 1 and len(db.list_users()) == 4 and len(db.list_farmers()) == 2
     db._query("TRUNCATE farmers, users, routes RESTART IDENTITY CASCADE")
     monkeypatch.setattr(demo_seed, "seed_farm", lambda *a, **k: (_ for _ in ()).throw(RuntimeError("cut off midway")))
     with pytest.raises(RuntimeError):

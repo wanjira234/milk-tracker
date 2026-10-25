@@ -64,7 +64,7 @@ def test_admin_texts_an_alert_from_the_page_and_everyone_can_then_read_the_outbo
     press(at, "Send SMS")
     assert not at.exception
     a = db.get_alert(aid)
-    assert a["sms_sent_at"] is not None and a["sms_ok"] + a["sms_failed"] == 1  # the demo farm only
+    assert a["sms_sent_at"] is not None and a["sms_ok"] + a["sms_failed"] == 2  # the two demo farms on the route
     assert not [b for b in open_alerts(demo_seed.ADMIN_EMAIL).button if b.label == "Send SMS"]  # no second send offered
     at = open_alerts(demo_seed.FARMER_EMAIL)
     assert any("Wash udders" in m.value for m in at.markdown)  # in the farmer's outbox (and the alert list)
