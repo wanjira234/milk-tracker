@@ -132,7 +132,9 @@ CLAY_CSS = (
     "[class*='st-key-clay']{border:0 !important;border-radius:32px !important;background:linear-gradient(180deg,#FFFBF0,#F6EBD3) !important;"
     "box-shadow:0 34px 60px -12px rgba(0,0,0,.55),0 8px 0 #D8C7A0,inset 0 3px 0 rgba(255,255,255,.95),inset 0 -8px 16px rgba(160,130,70,.18) !important;padding:1.4rem 1.2rem .6rem !important}"
     "[class*='st-key-clay'] [data-testid='stFormSubmitButton'],[class*='st-key-clay'] [data-testid='stFormSubmitButton']>div{width:100%}"
-    "[class*='st-key-clay'] [data-testid='stForm']{border:0 !important;padding:0 !important;background:transparent !important}"
+    "[class*='st-key-clay'] [data-testid='stForm']{border:0 !important;padding:0 !important;background:transparent !important;box-shadow:none !important;border-radius:0 !important}"
+    "[class*='st-key-clay'] [data-testid='stCaptionContainer'],[class*='st-key-clay'] [data-testid='stCaptionContainer'] *,[class*='st-key-clay'] [data-testid='stRadio'] label p{color:#4A5A4F !important}"
+    "[class*='st-key-clay'] [data-testid='stFormSubmitButton'],[class*='st-key-clay'] [data-testid='stFormSubmitButton']>div,[class*='st-key-clay'] [data-testid='stFormSubmitButton'] button{width:100% !important;display:block}"
     "[class*='st-key-clay'] [data-testid='stTextInputRootElement']{border-radius:999px !important;background:#EFE6D2 !important;border:0 !important;"
     "box-shadow:inset 0 3px 7px rgba(120,95,45,.28) !important;overflow:hidden}"
     "[class*='st-key-clay'] [data-baseweb='input'],[class*='st-key-clay'] [data-baseweb='base-input'],[class*='st-key-clay'] input{background:transparent !important;border:0 !important;box-shadow:none !important}"
@@ -143,6 +145,8 @@ CLAY_CSS = (
     "[class*='st-key-clay'] [data-testid='stFormSubmitButton'] button,[class*='st-key-clay'] .stButton button{border-radius:999px !important;min-height:3.1rem;width:100%;display:block;font-weight:700;border:0 !important;"
     "background:linear-gradient(180deg,#3E9E5E,#2A6F46) !important;color:#fff !important;box-shadow:0 7px 0 #164A2E,0 14px 22px rgba(22,74,46,.4);transition:transform .1s,box-shadow .1s}"
     "[class*='st-key-clay'] [data-testid='stFormSubmitButton'] button:active{transform:translateY(5px);box-shadow:0 2px 0 #164A2E,0 6px 12px rgba(22,74,46,.4)}"
+    "[class*='st-key-clay_signup']{padding:2.6rem 1.2rem 1.6rem !important}"
+    "[class*='st-key-clay'] [data-testid='stElementContainer']:has([data-testid='stFormSubmitButton']),[class*='st-key-clay'] div:has(>[data-testid='stFormSubmitButton']){width:100% !important}"
     "@media (prefers-reduced-motion:reduce){.peek,.pk-cloud,.pk-flower,.pk-eyes,.pk-chew,.pk-grass{animation:none !important}}"
     "@media (max-width:640px){.pk-cloud,.pk-flower{display:none}}"
     "</style>"
@@ -493,6 +497,7 @@ def require_login(roles=None):
             public_site.render_footer()
         with t_signup:
             public_site.page_title("Create your account", "Farmers, vets and milk-buyer staff each get their own view.")
+            st.markdown(PEEK_COW.replace('id="pk-', 'id="pk2-').replace("url(#pk-", "url(#pk2-"), unsafe_allow_html=True)  # own gradient ids: a hidden tab's copy would break the other
             with st.columns([1, 3, 1])[1], st.container(border=True, key="clay_signup"):
                 _tab_signup()
             public_site.render_footer()
