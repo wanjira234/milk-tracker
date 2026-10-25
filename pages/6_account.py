@@ -21,9 +21,9 @@ row = db.get_user(user["id"])
 st.write(f"Phone: {row['phone'] or 'not set'}  \nEmail: {row['email'] or 'not set'}")
 st.subheader("Email and password login")
 with st.form("set_password", clear_on_submit=True):
-    email = st.text_input("Email", value=row["email"] or "", key="acct_email")
-    new = st.text_input("New password (at least 8 characters)", type="password", key="acct_new")
-    again = st.text_input("New password again", type="password", key="acct_again")
+    email = st.text_input("Email", value=row["email"] or "", key="acct_email", autocomplete="username")
+    new = st.text_input("New password (at least 8 characters)", type="password", key="acct_new", autocomplete="new-password")
+    again = st.text_input("New password again", type="password", key="acct_again", autocomplete="new-password")
     if st.form_submit_button("Save", type="primary"):
         try:
             if new != again:
@@ -39,7 +39,7 @@ if not row["email"] or not db.get_user(user["id"]):
 elif accounts.totp_required(user["id"]):
     st.success("Two-factor login is ON. After your password you also type a 6-digit code from your authenticator app.")
     with st.form("totp_off", clear_on_submit=True):
-        code = st.text_input("To turn it off, type a current code", key="totp_off_code", max_chars=7)
+        code = st.text_input("To turn it off, type a current code", key="totp_off_code", max_chars=7, autocomplete="one-time-code")
         if st.form_submit_button("Turn off two-factor"):
             if accounts.disable_totp(user["id"], code):
                 st.success("Two-factor login is off.")
@@ -67,7 +67,7 @@ else:
         st.write("Scan the picture, or choose *enter a setup key* in the app and type this key:")
         st.code(pending["secret"])
         with st.form("totp_on", clear_on_submit=True):
-            code = st.text_input("Then type the 6-digit code the app shows", key="totp_on_code", max_chars=7)
+            code = st.text_input("Then type the 6-digit code the app shows", key="totp_on_code", max_chars=7, autocomplete="one-time-code")
             if st.form_submit_button("Turn on two-factor", type="primary"):
                 if accounts.confirm_totp_setup(user["id"], code):
                     st.success("Two-factor login is on.")
