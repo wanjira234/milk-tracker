@@ -266,7 +266,10 @@ PUBLIC_CSS = (
 # Lets the big buttons and the links open a view (Home, Log in, Sign up) and scroll to a section. If scripts are
 # blocked the buttons do nothing. The page text is fixed; nothing typed is used here.
 GOTO_JS = (
-    "<script>(function(){var p=window.parent,d=p.document;if(p.__gotoReady)return;p.__gotoReady=true;"
+    "<script>(function(){var P=window.parent;if(P.__gotoReady)return;P.__gotoReady=true;"
+    # The handlers are built in the main page's own scripting world (P.Function), not in this tiny frame: Streamlit removes
+    # the frame when a page changes (log in, open another page), and handlers made inside it would die with it.
+    "function install(){var p=window,d=document;"
     "var flip=function(f){f.classList.toggle('on')};"
     "d.addEventListener('click',function(e){var f=e.target.closest('.flipc');if(f){flip(f);return;}"
     "var a=e.target.closest('[data-goto]');if(!a)return;e.preventDefault();"
@@ -284,6 +287,7 @@ GOTO_JS = (
     "cancelAnimationFrame(raf);raf=requestAnimationFrame(function(){t.style.setProperty('--ry',(x*9).toFixed(2)+'deg');t.style.setProperty('--rx',(-y*9).toFixed(2)+'deg');});},true);"
     "d.addEventListener('pointerout',function(e){var t=e.target.closest&&e.target.closest('[data-tilt]');"
     "if(t&&!t.contains(e.relatedTarget)){t.style.setProperty('--rx','0deg');t.style.setProperty('--ry','0deg');}},true);"
+    "}(new P.Function('return '+install.toString()))()();"
     "})();</script>"
 )
 
