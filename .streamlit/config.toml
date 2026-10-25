@@ -5,5 +5,9 @@ backgroundColor = "#FFF8EA"
 secondaryBackgroundColor = "#E4EFE2"
 textColor = "#1B2B22"
 
+[client]
+# The app draws its own menu for each role; the built-in page list would flash up on first load (and show every page, even to someone not logged in).
+showSidebarNavigation = false
+
 [server]
 enableStaticServing = true

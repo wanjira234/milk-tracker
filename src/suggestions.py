@@ -12,9 +12,8 @@ the next round of data attributable to that one change.
 """
 import math
 
-from src.models import MIN_COMPLETE_DAYS
+from src.limits import MAX_STEP, MIN_COMPLETE_DAYS
 
-MAX_STEP = 0.10
 
 
 def current_cost_per_kg(catalogue_rows=(), logged_cost_per_kg=None):
