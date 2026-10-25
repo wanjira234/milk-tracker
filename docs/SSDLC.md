@@ -56,7 +56,7 @@ Findings from the design review that we fixed: the shared owner password was onl
 
 ## 4. Security testing
 
-- **Automated tests:** about 490, run against a real Postgres. They include access to another farm's or another vet's records, wrong roles opening pages, lockouts, code throttling, SMS and AI rewording checks, and deletion rules.
+- **Automated tests:** about 485, run against a real Postgres. They include access to another farm's or another vet's records, wrong roles opening pages, lockouts, code throttling, SMS and AI rewording checks, and deletion rules.
 - **Static analysis:** bandit run over the code: no high-severity findings. The seven medium findings are all SQL strings assembled from fixed column whitelists, each checked by hand. The low findings are non-secret flags and the random generator used only to make simulated demo data.
 - **Manual checks:** row-level security on the Supabase tables is checked by hand in the dashboard; the demo uses a separate database holding simulated data.
 - **Not done:** an external penetration test, dependency vulnerability scanning in CI, and load testing.
