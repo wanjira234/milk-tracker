@@ -15,7 +15,7 @@ from datetime import datetime, timedelta, timezone
 
 import psycopg2
 
-from src import db, logincode
+from src import db, logincode, totp
 from src.ingestion.manual_entry import normalize_phone
 from src.passwords import DUMMY_HASH, check_strength, hash_password, verify_password
 
@@ -170,6 +170,16 @@ def locked_message(raw_email, now=None):
     return None
 
 
+def locked_message_for_id(user_id, now=None):
+    """Same as locked_message, for the second-factor step where we already hold the user id."""
+    now = now or _now()
+    user = db.get_user(user_id)
+    if user and user["locked_until"] and now < user["locked_until"]:
+        minutes = int((user["locked_until"] - now).total_seconds() // 60) + 1
+        return f"Too many wrong tries. Try again in about {minutes} minute(s), or log in with an SMS code."
+    return None
+
+
 def owner_locked_message(now=None):
     """The owner password is one shared secret, so wrong guesses count against everyone together:
     5 wrong tries lock the owner login for 15 minutes, however many browsers are used."""
@@ -204,6 +214,71 @@ def set_password(user_id, new_password, email=None):
         db.update_user(user_id, **fields)
     except psycopg2.errors.UniqueViolation:
         raise ValueError("that email is already used by another account") from None
+
+
+# --- two-factor login (optional, authenticator app) ---------------------------------------------
+
+
+def totp_required(user_id):
+    """True when this person has switched on two-factor login."""
+    t = db.get_totp(user_id)
+    return bool(t and t["enabled"] and t["secret"])
+
+
+def begin_totp_setup(user_id):
+    """Make a fresh key (not yet active) and return it. Active only once a code from the app is confirmed."""
+    secret = totp.new_secret()
+    db.set_totp(user_id, totp_secret=secret, totp_enabled=False, totp_last_step=None, totp_failed=0)
+    return secret
+
+
+def confirm_totp_setup(user_id, entered, now=None):
+    """Switch two-factor on if `entered` is a valid code from the key made by begin_totp_setup."""
+    t = db.get_totp(user_id)
+    if not t or not t["secret"] or t["enabled"]:
+        return False
+    step = totp.verify(t["secret"], entered, now=(now or _now()).timestamp())
+    if step is None:
+        return False
+    db.set_totp(user_id, totp_enabled=True, totp_last_step=step, totp_failed=0)
+    return True
+
+
+def verify_totp_login(user_id, entered, now=None):
+    """Check the second factor. A code works once; five wrong codes lock the account for 15 minutes,
+    the same lock the password step respects, so starting over with the password does not reset the count."""
+    now = now or _now()
+    t = db.get_totp(user_id)
+    user = db.get_user(user_id)
+    if not t or not t["enabled"] or not user or not user["active"]:
+        return False
+    if user["locked_until"] and now < user["locked_until"]:
+        return False
+    step = totp.verify(t["secret"], entered, now=now.timestamp(), after_step=t["last_step"])
+    if step is None:
+        failed = t["failed"] + 1
+        if failed >= MAX_FAILED_LOGINS:
+            db.set_totp(user_id, totp_failed=0)
+            db.update_user(user_id, locked_until=now + LOCKOUT)
+        else:
+            db.set_totp(user_id, totp_failed=failed)
+        return False
+    db.set_totp(user_id, totp_failed=0, totp_last_step=step)
+    return True
+
+
+def disable_totp(user_id, entered, now=None):
+    """Turn two-factor off; asks for a current code so a borrowed, logged-in phone cannot do it."""
+    if not verify_totp_login(user_id, entered, now=now):
+        return False
+    db.set_totp(user_id, totp_secret=None, totp_enabled=False, totp_last_step=None, totp_failed=0)
+    return True
+
+
+def admin_reset_totp(actor, user_id):
+    """For someone who lost their phone: an admin switches their two-factor off so they can set it up again."""
+    _need_admin(actor)
+    db.set_totp(user_id, totp_secret=None, totp_enabled=False, totp_last_step=None, totp_failed=0)
 
 
 # --- creating accounts (admin) ----------------------------------------------------

@@ -240,6 +240,11 @@ CREATE INDEX IF NOT EXISTS idx_login_codes_user ON login_codes (user_id, created
 -- Self-signup waits for an admin's approval (a pending login cannot log in and has no farm yet).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS pending   BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS farm_name TEXT;
+-- Optional two-factor login (authenticator app). The app works without these until they are added.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret    TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled   BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_last_step BIGINT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_failed    INTEGER NOT NULL DEFAULT 0;
 
 DO $$
 DECLARE c text;
