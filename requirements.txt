@@ -9,3 +9,4 @@ anthropic>=0.40
 africastalking>=1.2
 modal>=0.70
 pytest>=8.0
+segno>=1.6

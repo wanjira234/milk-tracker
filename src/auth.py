@@ -142,9 +142,36 @@ def _tab_email():
             st.info("Your signup is waiting for an admin to approve it. Try again later.")
             return
         if user:
+            if accounts.totp_required(user["id"]):
+                st.session_state["pending_2fa"] = accounts.session_user(user)  # password right; the code is still to come
+                st.rerun()
             _log_in(accounts.session_user(user))
         _wrong()
         st.error(accounts.locked_message(email) or "Wrong email or password.")
+
+
+def _second_factor_screen(pending):
+    """Password was right and this person uses two-factor: ask for the code from their authenticator app."""
+    from src import accounts, public_site
+
+    st.markdown(LOGGED_OUT_CSS, unsafe_allow_html=True)
+    public_site.render_header()
+    public_site.page_title("One more step", "Open your authenticator app and type the 6-digit code for Maziwa Plus.")
+    with st.columns([1, 3, 1])[1], st.container(border=True):
+        with st.form("second_factor"):
+            code = st.text_input("6-digit code", max_chars=7, key="second_factor_code")
+            go = st.form_submit_button("Verify", type="primary")
+        if go:
+            if accounts.verify_totp_login(pending["id"], code):
+                st.session_state.pop("pending_2fa", None)
+                _log_in(pending)
+            _wrong()
+            st.error(accounts.locked_message_for_id(pending["id"]) or "That code didn't work. Codes change every 30 seconds.")
+        if st.button("Start again"):
+            st.session_state.pop("pending_2fa", None)
+            st.rerun()
+    public_site.render_footer()
+    st.stop()
 
 
 def _tab_signup():
@@ -269,6 +296,11 @@ def require_login(roles=None):
         st.error("This app is locked: no password has been set. Set APP_PASSWORD (see README).")
         st.stop()
     user = current_user()
+    if not user and st.session_state.get("pending_2fa"):
+        if _too_many():
+            st.session_state.pop("pending_2fa", None)
+        else:
+            _second_factor_screen(st.session_state["pending_2fa"])
     if not user:
         st.markdown(LOGGED_OUT_CSS, unsafe_allow_html=True)
         from src import public_site

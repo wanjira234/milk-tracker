@@ -47,6 +47,7 @@ Findings from the design review that we fixed: the shared owner password was onl
 
 - Passwords hashed with scrypt, salted, with the settings stored beside each hash. Constant-time comparison for secrets. A dummy hash is checked for unknown emails so timing does not reveal who has an account.
 - SMS login codes are stored only as salted HMAC-SHA256 values; single-use, short-lived, limited tries.
+- Optional two-factor login with an authenticator app (RFC 6238 codes, checked against the standard test vector). Codes are single-use, five wrong codes lock the account, and an admin can reset it for a lost phone.
 - All SQL values are parameters; the few dynamic parts come from fixed whitelists.
 - No user input is rendered as HTML; the only `unsafe_allow_html` use is fixed styling.
 - Secrets are read from the environment; `.env` is git-ignored; the app stays locked if no owner password or admin phone is configured.
@@ -55,7 +56,7 @@ Findings from the design review that we fixed: the shared owner password was onl
 
 ## 4. Security testing
 
-- **Automated tests:** more than 440, run against a real Postgres. They include access to another farm's or another vet's records, wrong roles opening pages, lockouts, code throttling, SMS and AI rewording checks, and deletion rules.
+- **Automated tests:** about 490, run against a real Postgres. They include access to another farm's or another vet's records, wrong roles opening pages, lockouts, code throttling, SMS and AI rewording checks, and deletion rules.
 - **Static analysis:** bandit run over the code: no high-severity findings. The seven medium findings are all SQL strings assembled from fixed column whitelists, each checked by hand. The low findings are non-secret flags and the random generator used only to make simulated demo data.
 - **Manual checks:** row-level security on the Supabase tables is checked by hand in the dashboard; the demo uses a separate database holding simulated data.
 - **Not done:** an external penetration test, dependency vulnerability scanning in CI, and load testing.
@@ -66,8 +67,8 @@ Findings from the design review that we fixed: the shared owner password was onl
 - **Database access:** the app connects server-side through the connection pooler; the public API keys cannot read the tables because row-level security is on.
 - **SMS:** Africa's Talking sandbox for the demo; messages reach the simulator, not real phones. A live account must be set up, and sender registration completed, before real farmers are texted.
 - **AI:** Claude Haiku receives the advice facts, not personal details such as names or phone numbers (the message text is generated from the farm's numbers and feed names).
-- **Before real use:** a data-protection review (consent, retention, a privacy notice), password reset, an audit log of who changed what, two-factor login for admins, and dependency scanning in the build.
+- **Before real use:** a data-protection review (consent, retention, a privacy notice), password reset, an audit log of who changed what, two-factor login required for admins, field-level encryption of personal data, and dependency scanning in the build.
 
 ## Known gaps, honestly
 
-No email or phone verification at sign-up (admin approval is the check), no password reset, no two-factor login, no audit log, no penetration test, no data-protection review yet, and SMS is sandbox-only.
+No email or phone verification at sign-up (admin approval is the check), no password reset, two-factor login is optional and not yet forced for admins, no field-level encryption of phone numbers or the authenticator key (we rely on Supabase's storage encryption and row-level security), no audit log, no penetration test, no data-protection review yet, and SMS is sandbox-only.

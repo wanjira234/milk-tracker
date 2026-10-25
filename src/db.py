@@ -341,6 +341,27 @@ def delete_pending_user(user_id):
     _query("DELETE FROM users WHERE id = %s AND pending", (user_id,))
 
 
+def get_totp(user_id):
+    """Two-factor state: {'secret','enabled','last_step','failed'}, or None for no such user or when the
+    two-factor columns are not in the database yet (sql/schema.sql not re-run), so the app still works."""
+    try:
+        row = _query("SELECT totp_secret, totp_enabled, totp_last_step, totp_failed FROM users WHERE id = %s", (user_id,), one=True)
+    except psycopg2.errors.UndefinedColumn:
+        return None
+    if not row:
+        return None
+    return {"secret": row["totp_secret"], "enabled": row["totp_enabled"], "last_step": row["totp_last_step"], "failed": row["totp_failed"]}
+
+
+def set_totp(user_id, **fields):
+    allowed = {"totp_secret", "totp_enabled", "totp_last_step", "totp_failed"}
+    bad = set(fields) - allowed
+    if bad or not fields:
+        raise ValueError(f"cannot update {sorted(bad)}")
+    sets = ", ".join(f"{k} = %s" for k in fields)
+    _query(f"UPDATE users SET {sets} WHERE id = %s", (*fields.values(), user_id))
+
+
 def get_user(user_id):
     return _query(f"SELECT {USER_COLUMNS} FROM users WHERE id = %s", (user_id,), one=True)
 

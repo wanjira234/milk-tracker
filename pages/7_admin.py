@@ -148,6 +148,14 @@ if users:
             st.rerun()
 
 
+with st.expander("Someone lost their phone? Reset their two-factor login"):
+    if users:
+        with st.form("reset_totp"):
+            rid = st.selectbox("Login", [u["id"] for u in users], format_func={u["id"]: f"{u['name']} ({u['role']})" for u in users}.get, key="reset_totp_id")
+            if st.form_submit_button("Switch off their two-factor"):
+                accounts.admin_reset_totp(st.session_state["user"], rid)
+                st.success("Done. They can log in with their password and set it up again.")
+
 st.header("Delete")
 st.caption("Deleting cannot be undone. Each one asks you to type DELETE.")
 admin_user = st.session_state["user"]
