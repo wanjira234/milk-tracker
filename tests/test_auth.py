@@ -158,3 +158,26 @@ def test_farm_pages_are_closed_to_the_admin_and_the_vet(monkeypatch, role):
         at.session_state["user"] = {"id": None, "role": role, "name": "X", "farmer_id": None, "must_change_password": False}
         at = at.run()
         assert not at.exception and not at.metric and not at.number_input, path
+
+
+def test_login_screen_has_the_cow_card_and_a_logged_in_page_gets_the_top_bar(monkeypatch):
+    monkeypatch.setenv("APP_PASSWORD", "owner-pass-xyz")
+    at = run("app.py")
+    assert not at.exception
+    text = " ".join(m.value for m in at.markdown)
+    assert 'class="peek"' in text and "pk-chew" in text  # the cow peeking over the login card
+
+    from src import auth
+
+    assert "st-key-topbar" in auth.TOPBAR_CSS and auth.TOPBAR_SHOWN >= 3
+    for role in ("farmer", "vet", "admin", "route_admin"):
+        assert auth.menu_for(role)[0][1] == "Home"  # Home is always the first link on the bar
+
+
+def test_loader_css_shows_a_bar_and_the_cow_only_while_the_script_runs_and_hides_the_small_running_label():
+    from src import auth
+
+    css = auth.loader_css()
+    assert 'data-test-script-state="running"' in css and "::before" in css and "::after" in css
+    assert "data:image/svg+xml" in css and "stStatusWidget" in css and "prefers-reduced-motion" in css
+    assert css.count("xmlns=") == 1 or "xmlns%3D" in css  # the logo is embedded once, with a single namespace

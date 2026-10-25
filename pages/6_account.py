@@ -21,9 +21,9 @@ row = db.get_user(user["id"])
 st.write(f"Phone: {row['phone'] or 'not set'}  \nEmail: {row['email'] or 'not set'}")
 st.subheader("Email and password login")
 with st.form("set_password", clear_on_submit=True):
-    email = st.text_input("Email", value=row["email"] or "", key="acct_email")
-    new = st.text_input("New password (at least 8 characters)", type="password", key="acct_new")
-    again = st.text_input("New password again", type="password", key="acct_again")
+    email = st.text_input("Email", value=row["email"] or "", key="acct_email", autocomplete="username")
+    new = st.text_input("New password (at least 8 characters)", type="password", key="acct_new", autocomplete="new-password")
+    again = st.text_input("New password again", type="password", key="acct_again", autocomplete="new-password")
     if st.form_submit_button("Save", type="primary"):
         try:
             if new != again:
@@ -34,12 +34,14 @@ with st.form("set_password", clear_on_submit=True):
             st.error(cap(e))
 
 st.subheader("Two-factor login (extra protection)")
-if not row["email"] or not db.get_user(user["id"]):
+if not row["email"]:
     st.caption("Set an email and password above first.")
+elif not accounts.totp_available(user["id"]):
+    st.info("Two-factor login is not switched on for this site yet. The site owner needs to run the database update (the four `ALTER TABLE users ... totp ...` lines in `sql/schema.sql`) first.")
 elif accounts.totp_required(user["id"]):
     st.success("Two-factor login is ON. After your password you also type a 6-digit code from your authenticator app.")
     with st.form("totp_off", clear_on_submit=True):
-        code = st.text_input("To turn it off, type a current code", key="totp_off_code", max_chars=7)
+        code = st.text_input("To turn it off, type a current code", key="totp_off_code", max_chars=7, autocomplete="one-time-code")
         if st.form_submit_button("Turn off two-factor"):
             if accounts.disable_totp(user["id"], code):
                 st.success("Two-factor login is off.")
@@ -50,8 +52,12 @@ else:
     st.write("Add a second step to your login: even if someone learns your password, they also need your phone. "
              "Use any authenticator app (Google Authenticator, Microsoft Authenticator, Authy).")
     if st.button("Set up two-factor", key="totp_begin"):
-        accounts.begin_totp_setup(user["id"])
-        st.rerun()
+        try:
+            accounts.begin_totp_setup(user["id"])
+        except ValueError as e:
+            st.error(cap(e))
+        else:
+            st.rerun()
     pending = db.get_totp(user["id"])
     if pending and pending["secret"] and not pending["enabled"]:
         from src import totp
@@ -67,7 +73,7 @@ else:
         st.write("Scan the picture, or choose *enter a setup key* in the app and type this key:")
         st.code(pending["secret"])
         with st.form("totp_on", clear_on_submit=True):
-            code = st.text_input("Then type the 6-digit code the app shows", key="totp_on_code", max_chars=7)
+            code = st.text_input("Then type the 6-digit code the app shows", key="totp_on_code", max_chars=7, autocomplete="one-time-code")
             if st.form_submit_button("Turn on two-factor", type="primary"):
                 if accounts.confirm_totp_setup(user["id"], code):
                     st.success("Two-factor login is on.")
