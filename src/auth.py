@@ -322,7 +322,7 @@ def _force_password_change(user):
 # This is tidiness, not security: every page still checks the role itself (require_login(roles=...))
 # and the data is filtered by role.
 _COMMON = [("pages/11_alerts.py", "Alerts"), ("pages/12_vaccination.py", "Vaccination")]
-_ACCOUNT = [("pages/6_account.py", "Account")]
+_ACCOUNT = [("pages/13_website.py", "Website"), ("pages/6_account.py", "Account")]  # Website: the public Home / About / Contact pages
 MENU = {
     # A route admin runs one or more routes: attendance and notices for them, but no set-up or sign-up approval.
     "route_admin": [("app.py", "Home"), ("pages/10_attendance.py", "Attendance")] + _COMMON + _ACCOUNT,
@@ -396,12 +396,22 @@ def render_topbar(user, role):
     items = menu_for(role)
     if not items:
         return
-    st.markdown(TOPBAR_CSS, unsafe_allow_html=True)
+    from urllib.parse import quote
+
+    logo = "data:image/svg+xml;utf8," + quote(public_site.LOGO_SVG)
+    st.markdown(
+        TOPBAR_CSS + "<style>.st-key-tb_brand [data-testid='stPageLink-NavLink']{padding-left:3rem !important;border-radius:12px !important;"
+        f"background:url(\"{logo}\") no-repeat .25rem center/2.3rem !important}}"
+        ".st-key-tb_brand [data-testid='stPageLink-NavLink'] *{font-family:'Fredoka','DM Sans',sans-serif;font-size:1.15rem !important;color:#fff !important}"
+        ".st-key-tb_brand [data-testid='stPageLink-NavLink']:hover{background-color:rgba(255,255,255,.1) !important}</style>",
+        unsafe_allow_html=True,
+    )
     head, rest = items[:TOPBAR_SHOWN], items[TOPBAR_SHOWN:]
     try:
         with st.container(key="topbar"):
             cols = st.columns([2.3] + [1.15] * len(head) + [1.0, 1.0, 1.0], vertical_alignment="center")
-            cols[0].markdown(f'<div class="tb-brand">{public_site.LOGO_SVG}<span>Maziwa <b>Plus</b></span></div>', unsafe_allow_html=True)
+            with cols[0], st.container(key="tb_brand"):
+                st.page_link("pages/13_website.py", label="Maziwa Plus")  # the logo goes to the public Home page
             for col, (path, label) in zip(cols[1:], head):
                 with col:
                     st.page_link(path, label=label)

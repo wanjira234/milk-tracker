@@ -110,7 +110,7 @@ def test_a_route_admin_cannot_delete_or_open_the_admin_page(world):
 def test_the_route_admin_menu_has_no_set_up_pages(world):
     assert menu_key(world["ra_user"]) == "route_admin" and menu_key(world["head"]) == "admin"
     labels = [label for _, label in menu_for("route_admin")]
-    assert labels == ["Home", "Attendance", "Alerts", "Vaccination", "Account"]
+    assert labels == ["Home", "Attendance", "Alerts", "Vaccination", "Website", "Account"]
 
 
 def test_the_route_admin_home_is_scoped(world):
