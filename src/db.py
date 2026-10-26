@@ -1,10 +1,13 @@
 """Postgres access layer. Raw SQL via psycopg2 on purpose: no ORM."""
+import copy
 import os
 import threading
+import time
 from contextlib import contextmanager
 from datetime import date
 
 import psycopg2
+import psycopg2.extensions
 from psycopg2 import pool as pg_pool
 from psycopg2.extras import RealDictCursor
 
@@ -41,6 +44,8 @@ def batch():
     finally:
         _local.conn = None
         conn.close()
+        clear_cache()
+        clear_cache()
 
 
 _pool = None
@@ -106,12 +111,91 @@ def get_conn():
             conn.close()
 
 
+IDLE_PING_AFTER = 30  # seconds a pooled connection may sit unused before we check it is still alive
+_CACHE_TTL = 15       # seconds a cached read may be reused (writes through this app clear it at once)
+_cache = {}
+_last_used = {}  # id(connection) -> when it last finished a query
+_cache_lock = threading.Lock()
+_NEVER_CACHE = ("totp", "locked_until", "for update", "now()", "current_")
+
+
+def clear_cache():
+    with _cache_lock:
+        _cache.clear()
+
+
+def _fresh(conn):
+    """True if a pooled connection is usable. Only pings after a long idle; a busy one is trusted, so a click
+    costs one round trip to the database instead of three or four."""
+    if conn.closed:
+        return False
+    if conn.autocommit is False and conn.status != psycopg2.extensions.STATUS_READY:
+        conn.rollback()
+    conn.autocommit = True
+    if time.monotonic() - _last_used.get(id(conn), 0) > IDLE_PING_AFTER:
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1")
+        except psycopg2.Error:
+            return False
+    return True
+
+
+def _run_pooled(sql, params, one):
+    """One statement in autocommit: a single round trip, atomic by itself. Retries a read once if the
+    server had silently dropped the connection."""
+    is_read = sql.lstrip()[:6].lower() == "select"
+    pool = _get_pool()
+    for attempt in (0, 1):
+        conn = pool.getconn()
+        try:
+            if not _fresh(conn):
+                raise psycopg2.OperationalError("stale connection")
+            conn.autocommit = True
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(sql, params)
+                out = None if cur.description is None else (cur.fetchone() if one else cur.fetchall())
+            _last_used[id(conn)] = time.monotonic()
+            return out
+        except (psycopg2.OperationalError, psycopg2.InterfaceError):
+            try:
+                pool.putconn(conn, close=True)
+            except pg_pool.PoolError:
+                conn.close()
+            conn = None
+            if attempt or not is_read:
+                raise
+        finally:
+            if conn is not None:
+                try:
+                    pool.putconn(conn, close=bool(conn.closed))
+                except pg_pool.PoolError:  # pool was replaced (DATABASE_URL changed) while this was in use
+                    conn.close()
+
+
 def _query(sql, params=(), one=False):
-    with get_conn() as conn, conn.cursor(cursor_factory=RealDictCursor) as cur:
-        cur.execute(sql, params)
-        if cur.description is None:
-            return None
-        return cur.fetchone() if one else cur.fetchall()
+    shared = getattr(_local, "conn", None)
+    if shared is not None:  # inside batch(): its own connection and transaction, never cached
+        with shared.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(sql, params)
+            if cur.description is None:
+                return None
+            return cur.fetchone() if one else cur.fetchall()
+    low = sql.lower()
+    cacheable = low.lstrip()[:6] == "select" and not any(w in low for w in _NEVER_CACHE)
+    if cacheable:
+        key = (sql, repr(params), one, os.environ.get("DATABASE_URL"))
+        with _cache_lock:
+            hit = _cache.get(key)
+        if hit and time.monotonic() - hit[0] < _CACHE_TTL:
+            return copy.deepcopy(hit[1])
+    out = _run_pooled(sql, params, one)
+    if cacheable:
+        with _cache_lock:
+            _cache[key] = (time.monotonic(), copy.deepcopy(out))
+    else:
+        clear_cache()  # any write (or odd read) through this app: forget what we remember
+    return out
 
 
 # --- farmers -----------------------------------------------------------------
