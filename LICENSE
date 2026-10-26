@@ -1,0 +1,46 @@
+Maziwa Plus (Milk Tracker): Proprietary Licence. All rights reserved.
+
+Copyright (c) 2026 Epiphany Wanjira and the HustleWindow team.
+
+This is source-available software, NOT open-source software. The source code,
+design, text, images and documentation in this repository (the "Software") are
+the property of the copyright holders. No licence is granted except as stated
+below.
+
+1. Permitted: evaluation
+   You may view the Software and run the hosted demo, and the organisers and
+   judges of the FNB App of the Year hackathon may read, run and assess it,
+   solely to evaluate this hackathon entry.
+
+2. Not permitted without prior written permission from the copyright holders
+   (a) copying, forking for any purpose other than viewing on the hosting
+       platform, modifying, or creating derivative works;
+   (b) distributing, publishing, sublicensing, selling or hosting the Software
+       or any part of it, as a service or otherwise;
+   (c) any commercial use, including use with real farms, processors,
+       cooperatives or customers;
+   (d) removing or altering this notice or the copyright notices;
+   (e) using the Software, its data model or its text to build a competing
+       product or to train a machine-learning model.
+
+3. Hosting platform terms
+   The Software is hosted on GitHub. GitHub's Terms of Service allow other
+   GitHub users to view and fork public repositories on GitHub. That limited
+   platform right does not grant any permission above; a fork carries this
+   licence and remains subject to it.
+
+4. Third-party components
+   The Software uses third-party open-source packages (listed in
+   requirements.txt). Each remains under its own licence, which this notice does
+   not change.
+
+5. Data
+   Data shown in the demo is simulated. No real farmer's data is included.
+
+6. No warranty
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED, INCLUDING MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+   NON-INFRINGEMENT. THE COPYRIGHT HOLDERS ARE NOT LIABLE FOR ANY CLAIM, DAMAGES
+   OR OTHER LIABILITY ARISING FROM THE SOFTWARE OR ITS USE.
+
+Permission requests: epiphanywanjira@gmail.com
