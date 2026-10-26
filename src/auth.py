@@ -413,7 +413,7 @@ def render_topbar(user, role):
     head, rest = items[:TOPBAR_SHOWN], items[TOPBAR_SHOWN:]
     try:
         with st.container(key="topbar"):
-            cols = st.columns([2.3] + [1.15] * len(head) + [1.0, 1.0, 1.0], vertical_alignment="center")
+            cols = st.columns([2.3] + [1.15] * len(head) + [1.0, 0.8, 1.0, 1.0], vertical_alignment="center")
             with cols[0], st.container(key="tb_brand"):
                 st.page_link("pages/13_website.py", label="Maziwa Plus")  # the logo goes to the public Home page
             for col, (path, label) in zip(cols[1:], head):
@@ -423,8 +423,17 @@ def render_topbar(user, role):
                 with st.popover("More"):
                     for path, label in rest:
                         st.page_link(path, label=label)
-            cols[len(head) + 2].markdown(f'<div class="tb-who">{html_escape(user["name"])}</div>', unsafe_allow_html=True)
-            with cols[len(head) + 3]:
+            with cols[len(head) + 2]:
+                from src import notifications
+
+                bell = notifications.for_user(user)
+                with st.popover(f"🔔 {len(bell)}" if bell else "🔔"):
+                    if not bell:
+                        st.caption("Nothing needs your attention.")
+                    for text, page in bell:
+                        st.page_link(page, label=text)
+            cols[len(head) + 3].markdown(f'<div class="tb-who">{html_escape(user["name"])}</div>', unsafe_allow_html=True)
+            with cols[len(head) + 4]:
                 if st.button("Log out", key="topbar_logout"):
                     st.session_state.clear()
                     st.rerun()
