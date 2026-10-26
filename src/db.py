@@ -341,13 +341,35 @@ def delete_pending_user(user_id):
     _query("DELETE FROM users WHERE id = %s AND pending", (user_id,))
 
 
+TOTP_COLUMNS_SQL = (
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT FALSE",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_last_step BIGINT",
+    "ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_failed INTEGER NOT NULL DEFAULT 0",
+)
+
+
+def _add_totp_columns():
+    """Add the two-factor columns ourselves when the database was set up before they existed, so nobody has to
+    re-run sql/schema.sql by hand. Safe to repeat. False if this database login is not allowed to alter the table."""
+    try:
+        for stmt in TOTP_COLUMNS_SQL:
+            _query(stmt)
+    except psycopg2.Error:
+        return False
+    return True
+
+
 def get_totp(user_id):
     """Two-factor state: {'secret','enabled','last_step','failed'}, or None for no such user or when the
     two-factor columns are not in the database yet (sql/schema.sql not re-run), so the app still works."""
+    sql = "SELECT totp_secret, totp_enabled, totp_last_step, totp_failed FROM users WHERE id = %s"
     try:
-        row = _query("SELECT totp_secret, totp_enabled, totp_last_step, totp_failed FROM users WHERE id = %s", (user_id,), one=True)
+        row = _query(sql, (user_id,), one=True)
     except psycopg2.errors.UndefinedColumn:
-        return None
+        if not _add_totp_columns():
+            return None
+        row = _query(sql, (user_id,), one=True)
     if not row:
         return None
     return {"secret": row["totp_secret"], "enabled": row["totp_enabled"], "last_step": row["totp_last_step"], "failed": row["totp_failed"]}

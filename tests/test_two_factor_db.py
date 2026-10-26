@@ -104,6 +104,14 @@ def test_the_app_still_works_if_the_two_factor_columns_do_not_exist_yet(uid, mon
         accounts.begin_totp_setup(uid)  # a plain message, not a database traceback
 
 
+def test_the_app_adds_the_two_factor_columns_itself_on_an_older_database(uid):
+    for col in ("totp_secret", "totp_enabled", "totp_last_step", "totp_failed"):
+        db._query(f"ALTER TABLE users DROP COLUMN IF EXISTS {col}")
+    assert accounts.totp_available(uid)  # no manual schema step needed
+    secret = accounts.begin_totp_setup(uid)
+    assert secret and db.get_totp(uid)["enabled"] is False
+
+
 def test_login_screen_asks_for_the_code_after_the_password_and_lets_the_right_code_in(uid, monkeypatch):
     from streamlit.testing.v1 import AppTest
 
