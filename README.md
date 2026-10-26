@@ -91,6 +91,10 @@ Built with Claude Code assistance. Claude Haiku rewords SMS advice under the che
 
 See [SECURITY.md](SECURITY.md) for what is protected, how, and what is not yet done. Honest limits: SMS login codes need a live Africa's Talking account to reach real phones; the Swahili SMS wording is a draft awaiting a native speaker's review; there is no password-reset flow yet; and nothing here is a substitute for a data-protection review before real farmers' data is held at scale.
 
+## Licence
+
+Proprietary, all rights reserved: see [LICENSE](LICENSE). The code is public so that the hackathon judges can read it; copying, forking for reuse, redistribution and commercial use need written permission. The demo uses simulated data only.
+
 ## More
 
 [CONTEXT.md](CONTEXT.md) has the full project layout, decisions and working conventions.
