@@ -86,3 +86,31 @@ def signals(daily, feed_kg, min_days=MIN_DAYS_FOR_SIGNAL):
             continue
         results.append((feed_type, float(litres.corr(kg)), int(len(litres))))
     return sorted(results, key=lambda r: abs(r[1]), reverse=True)
+
+
+def effect_lines(effects):
+    """One plain sentence per feed from models.feed_effects output: [(feed, status, text)].
+
+    Says what the careful model found (a clear effect, an unclear one, or why it cannot tell), never a raw
+    correlation: a perfect-looking line on a few days is not evidence, and two feeds that always move
+    together cannot be told apart.
+    """
+    from src.limits import MIN_COMPLETE_DAYS
+
+    out = []
+    for e in effects:
+        f, st = e["feed"], e["status"]
+        if st == "clear":
+            lo, hi = sorted((e["ci_low"], e["ci_high"]))
+            text = (f"a clear effect: 1 more kg per cow per day goes with about {e['slope']:+.1f} litres per cow per day "
+                    f"(likely between {lo:+.1f} and {hi:+.1f}).")
+        elif st == "unclear":
+            text = "no clear effect yet. The data could be showing nothing at all."
+        elif st == "moves_with":
+            text = f"always changes together with {e['moves_with']}, so the two can't be told apart. Change one at a time to learn which matters."
+        elif st == "too_few_amounts":
+            text = "the amount hardly changed, so there is nothing to learn from."
+        else:
+            text = f"{e['n_days']} of the {MIN_COMPLETE_DAYS} usable days needed so far."
+        out.append((f, st, text))
+    return out
