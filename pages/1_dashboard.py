@@ -10,7 +10,8 @@ from src.messages import ICON
 from src import db
 from src.profit import profit_summary
 from src.water import water_summary
-from src.trends import MILKINGS_PER_DAY, daily_frame, signals, summary
+from src.loader import assess_farmer
+from src.trends import MILKINGS_PER_DAY, daily_frame, effect_lines, summary
 from src.ui import farmer_selector
 from src.auth import require_login
 
@@ -127,17 +128,14 @@ else:
     st.caption("No feed recorded in this period.")
 
 st.subheader("Does feed move yield?")
-found = signals(daily, feed_kg)
-if found:
-    for feed_type, corr, n in found:
-        direction = "rises with" if corr > 0 else "falls as you feed more of"
-        st.write(f"**{feed_type}**: milk {direction} this feed (correlation {corr:+.2f}, {n} complete days).")
+effects = assess_farmer(farmer_id)["effects"]
+if effects:
+    for feed_type, status, text in effect_lines(effects):
+        st.write(f"**{feed_type}**: {text}")
     st.caption(
-        "An early signal only. It can't separate feed from weather, cow condition or stage of lactation, "
-        "so treat it as a question to test, not an answer."
+        "Judged on the last 90 days with a careful test (it allows for milk being similar from day to day, and for "
+        "testing several feeds at once). Even a clear result can't separate feed from weather, cow condition or "
+        "stage of lactation, so treat it as a question to test, not an answer."
     )
 else:
-    st.caption(
-        "Not enough variation yet. This needs at least 7 complete days where the amount of a feed changed. "
-        "A ration that never changes can't show its effect."
-    )
+    st.caption("No feed recorded yet, so there is nothing to test.")

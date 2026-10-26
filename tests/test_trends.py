@@ -85,3 +85,22 @@ def test_signals_ignore_incomplete_days():
     feeds = [f(d, "dairy meal", 2 + d * 0.5, 100) for d in range(1, 10)]
     daily, feed_kg = daily_frame(yields, feeds, START, END)
     assert signals(daily, feed_kg)[0][2] == 8  # day 9 excluded
+
+
+def test_effect_lines_say_what_the_careful_model_found_never_a_bare_correlation():
+    from src.trends import effect_lines
+
+    base = {"n_days": 20, "slope": None, "ci_low": None, "ci_high": None, "moves_with": None}
+    rows = effect_lines([
+        {**base, "feed": "dairy meal", "status": "clear", "slope": 1.4, "ci_low": 0.6, "ci_high": 2.2},
+        {**base, "feed": "napier", "status": "moves_with", "moves_with": "dairy meal"},
+        {**base, "feed": "hay", "status": "unclear"},
+        {**base, "feed": "maize", "status": "too_few_days", "n_days": 5},
+        {**base, "feed": "silage", "status": "too_few_amounts"},
+    ])
+    text = {f: t for f, _, t in rows}
+    assert "+1.4" in text["dairy meal"] and "+0.6" in text["dairy meal"] and "correlation" not in text["dairy meal"]
+    assert "can't be told apart" in text["napier"] and "dairy meal" in text["napier"]
+    assert "no clear effect" in text["hay"]
+    assert "5 of the 14" in text["maize"]
+    assert "hardly changed" in text["silage"]
