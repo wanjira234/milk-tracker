@@ -1,6 +1,6 @@
 """The demo accounts and data for the judges. Need TEST_DATABASE_URL."""
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -21,7 +21,7 @@ def clean():
 def test_the_four_demo_logins_work_and_see_the_right_things():
     made = demo_seed.create_demo("demo-pass-123")
     assert set(made) == {demo_seed.ADMIN_EMAIL, demo_seed.VET_EMAIL, demo_seed.FARMER_EMAIL, demo_seed.FRESH_EMAIL,
-                         demo_seed.AGROVET_EMAIL}
+                         demo_seed.AGROVET_EMAIL, demo_seed.STORE_EMAIL, demo_seed.OWNER_EMAIL}
     users = {e: accounts.login_password(e, "demo-pass-123") for e in made}
     assert all(users.values()) and not any(u["must_change_password"] for u in users.values())
     farm = db.farmer_by_phone(demo_seed.DEMO_FARM_PHONE)
@@ -36,7 +36,7 @@ def test_the_four_demo_logins_work_and_see_the_right_things():
 def test_running_it_twice_changes_nothing_and_the_farm_has_enough_data_for_the_model():
     demo_seed.create_demo("demo-pass-123")
     assert demo_seed.create_demo("other-pass-456") == {}
-    assert len(db.list_farmers()) == 2 and len(db.list_users()) == 5
+    assert len(db.list_farmers()) == 2 and len(db.list_users()) == 7
     farm = db.farmer_by_phone(demo_seed.DEMO_FARM_PHONE)
     result = loader.assess_farmer(farm["id"], date.today())
     assert result["usable_days"] >= 14
@@ -46,7 +46,7 @@ def test_the_seed_command_asks_first_and_writes_nothing_unless_told_to(capsys):
     assert demo_seed.main(ask=lambda prompt: "no") == 1
     assert db.list_users() == [] and "Cancelled" in capsys.readouterr().out
     assert demo_seed.main(ask=lambda prompt: " Demo ") == 0
-    assert len(db.list_users()) == 5
+    assert len(db.list_users()) == 7
     out = capsys.readouterr().out
     assert "localhost" in out and "milk" not in out.split("database at:")[1].split("\n")[0]  # host shown, no password
 
@@ -95,3 +95,29 @@ def test_the_demo_agrovet_is_ready_for_a_pre_order():
     farm = db.farmer_by_phone(demo_seed.DEMO_FARM_PHONE)
     assert shop["role"] == "agrovet" and [p["name"] for p in db.list_products(shop["id"])] == ["Dairy meal", "Maize germ", "Mineral lick"]
     assert [a["id"] for a in db.farm_agrovets(farm["id"])] == [shop["id"]]
+
+
+def test_the_demo_has_an_organisation_its_store_and_a_platform_owner():
+    from src import orgs
+
+    demo_seed.create_demo("demo-pass-123")
+    admin = accounts.session_user(db.user_by_email(demo_seed.ADMIN_EMAIL))
+    owner = accounts.session_user(db.user_by_email(demo_seed.OWNER_EMAIL))
+    farm = db.farmer_by_phone(demo_seed.DEMO_FARM_PHONE)
+    store = db.user_by_email(demo_seed.STORE_EMAIL)
+    shop = db.user_by_email(demo_seed.AGROVET_EMAIL)
+    assert admin["org_id"] is not None and not orgs.is_platform_owner(admin) and orgs.is_platform_owner(owner)
+    assert orgs.buyer_store_for(farm["id"], store["id"]) and not orgs.buyer_store_for(farm["id"], shop["id"])
+    assert db.get_farmer(farm["id"])["town"] == demo_seed.DEMO_TOWN and db.shop(shop["id"])["pay_number"] == "123456"
+
+
+def test_one_password_for_every_demo_login(capsys):
+    demo_seed.create_demo("demo-pass-123")
+    admin = db.user_by_email(demo_seed.ADMIN_EMAIL)
+    db.update_user(admin["id"], failed_logins=9, locked_until=datetime(2099, 1, 1, tzinfo=timezone.utc))
+    assert demo_seed.main(ask=lambda p: "demo", argv=["--password", "short"]) == 1
+    assert demo_seed.main(ask=lambda p: "no", argv=["--password", "maziwadev"]) == 1
+    assert demo_seed.main(ask=lambda p: "demo", argv=["--password", "maziwadev"]) == 0
+    for email in demo_seed.ALL_EMAILS:
+        assert accounts.login_password(email, "maziwadev") is not None, email
+    assert accounts.login_password(demo_seed.ADMIN_EMAIL, "demo-pass-123") is None

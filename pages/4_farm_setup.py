@@ -6,7 +6,7 @@ import streamlit as st
 
 from src.messages import ICON
 
-from src import db
+from src import db, presets
 from src.calculator import breakdown, load_buckets, money, total_kg
 from src.ingestion.manual_entry import (
     record_catalogue_item,
@@ -40,6 +40,14 @@ with st.form("milk_price"):
 if db.get_milk_price(farmer_id) is None:
     st.caption("Without a price the app can't work out feed margin (milk income minus feed cost).")
 
+# --- town ---------------------------------------------------------------------
+with st.form("farm_town"):
+    town = st.text_input("Your town or area", value=(db.get_farmer(farmer_id) or {}).get("town") or "", placeholder="Limuru",
+                         help="Agrovets near you are listed first when you order.", key="setup_town")
+    if st.form_submit_button("Save town"):
+        db.set_farm_town(farmer_id, " ".join(town.split())[:60] or None)
+        st.success("Saved.")
+
 # --- feeds --------------------------------------------------------------------
 st.divider()
 st.subheader("Feeds")
@@ -51,6 +59,37 @@ st.caption(
 )
 
 catalogue = db.list_catalogue(farmer_id)
+todo = presets.missing(catalogue)
+if todo:
+    with st.expander("Quick start: tick the feeds you use", expanded=not catalogue):
+        st.caption("The usual feeds, with how they're usually bought and a rough weight. Tick yours, change the unit or "
+                   "weight if yours differ, and add what you pay. A feed without a price isn't saved yet.")
+        picked = st.data_editor(
+            pd.DataFrame([{"Use": False, "Feed": n, "Unit": u, "Kg in one (estimate)": float(kg), "Price per unit (KES)": None}
+                          for n, u, kg in todo]),
+            hide_index=True, width="stretch", key="preset_editor", disabled=["Feed"],
+            column_config={"Price per unit (KES)": st.column_config.NumberColumn(min_value=0, step=50, format="%.0f"),
+                           "Kg in one (estimate)": st.column_config.NumberColumn(min_value=0.1, format="%.1f")},
+        )
+        if st.button("Save the ticked feeds", type="primary", key="preset_save"):
+            rows = picked[picked["Use"]]
+            saved, skipped = [], []
+            for _, r in rows.iterrows():
+                if pd.isna(r["Price per unit (KES)"]):
+                    skipped.append(r["Feed"])
+                    continue
+                try:
+                    record_catalogue_item(farmer_id, r["Feed"], r["Unit"], r["Kg in one (estimate)"], r["Price per unit (KES)"])
+                    saved.append(r["Feed"])
+                except ValueError as e:
+                    st.error(f"{r['Feed']}: {cap(e)}")
+            if skipped:
+                st.warning("Add a price for " + ", ".join(skipped) + " to save it.")
+            if saved:
+                st.success("Saved " + ", ".join(saved) + ".")
+                st.rerun()
+            if not saved and not skipped:
+                st.info("Tick at least one feed.")
 if catalogue:
     df = pd.DataFrame(catalogue)[["name", "unit", "kg_per_unit", "kes_per_unit"]].astype(
         {"kg_per_unit": float, "kes_per_unit": float}

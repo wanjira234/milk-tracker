@@ -11,7 +11,7 @@ from src.auth import require_login
 from src.ui import cap
 
 st.set_page_config(page_title="Alerts", page_icon=ICON, layout="centered")
-user = require_login()
+user = require_login(roles=("admin", "vet", "farmer"))  # not agrovets: alerts are for farms, vets and buyers
 TZ = ZoneInfo("Africa/Nairobi")
 can_post = user["role"] in ("admin", "vet")
 

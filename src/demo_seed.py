@@ -27,6 +27,13 @@ FRESH_NOISE = 0.6  # less day-to-day wobble than the 40-day farm, so 14 days are
 AGROVET_EMAIL = "agrovet@demo.milk"
 AGROVET_PHONE = "+254700000997"
 AGROVET_PRODUCTS = (("Dairy meal", "70 kg bag", 2600), ("Maize germ", "70 kg bag", 1800), ("Mineral lick", "block", 900))
+# The milk buyer as an organisation, its own store (the only shop that can take payment from milk money),
+# and a platform-owner login that sees every organisation.
+DEMO_ORG = "Fresha (demo)"
+STORE_EMAIL, STORE_PHONE = "store@demo.milk", "+254700000996"
+STORE_PRODUCTS = (("Dairy meal", "70 kg bag", 2550), ("Mineral lick", "block", 850))
+OWNER_EMAIL = "owner@demo.milk"
+DEMO_TOWN = "Limuru"
 
 
 def seed_logs(farmer_id, today=None, days=40, seed=7, skip=0, noise=2.0):
@@ -113,10 +120,64 @@ def create_demo(password=None, today=None):
         demo_farm = db.farmer_by_phone(DEMO_FARM_PHONE)
         if demo_farm is not None:
             db.add_farm_agrovet(demo_farm["id"], shop_id)
+    # organisations, towns and tills (safe to re-run: each step only sets what it says)
+    org_id = db.add_org(DEMO_ORG)
+    db.set_route_org(route, org_id)
+    db.set_user_org(db.user_by_email(ADMIN_EMAIL)["id"], org_id)
+    for phone in (DEMO_FARM_PHONE, FRESH_FARM_PHONE):
+        farm = db.farmer_by_phone(phone)
+        if farm is not None and not farm.get("town"):
+            db.set_farm_town(farm["id"], DEMO_TOWN)
+    shop = db.user_by_email(AGROVET_EMAIL)
+    if shop is not None and not shop.get("town"):
+        db.set_shop_profile(shop["id"], DEMO_TOWN, "till", "123456", None)
+    if not db.user_by_email(STORE_EMAIL):
+        store_id = accounts.create_account("agrovet", "Fresha store (demo)", phone=STORE_PHONE, email=STORE_EMAIL, temp_password=password)
+        made[STORE_EMAIL] = password
+        db.set_user_org(store_id, org_id)
+        db.set_shop_profile(store_id, DEMO_TOWN, "paybill", "400200", None)
+        for name, unit, price in STORE_PRODUCTS:
+            db.upsert_product(store_id, name, unit, price)
+    # the shops' hours, and Fresha's store connected to its own (demo) system, which fills its catalogue
+    from datetime import time
+
+    from src import bridges, catalogue
+
+    shop = db.user_by_email(AGROVET_EMAIL)
+    if shop is not None and not db.shop_hours(shop["id"]):
+        db.set_shop_hours(shop["id"], {wd: {"opens": time(8), "closes": time(18), "delivers": wd in (1, 4)} for wd in range(6)}, 60)
+    store = db.user_by_email(STORE_EMAIL)
+    if store is not None:
+        if not db.shop_hours(store["id"]):
+            db.set_shop_hours(store["id"], {wd: {"opens": time(7), "closes": time(17), "delivers": wd in (2, 5)} for wd in range(6)}, 30)
+        if not (db.shop(store["id"]) or {}).get("bridge_kind"):
+            db.set_bridge(store["id"], "demo_fresha")
+            products, _ = catalogue.parse_rows(bridges.get("demo_fresha").fetch_catalogue())
+            catalogue.import_products(store["id"], products, "bridge")
+    if not db.user_by_email(OWNER_EMAIL):
+        accounts.create_account("admin", "Demo platform owner", email=OWNER_EMAIL, temp_password=password)
+        made[OWNER_EMAIL] = password
     # demo logins skip the forced password change: judges should get straight in
     for email in made:
         db.update_user(db.user_by_email(email)["id"], must_change_password=False)
     return made
+
+
+ALL_EMAILS = (ADMIN_EMAIL, VET_EMAIL, FARMER_EMAIL, FRESH_EMAIL, AGROVET_EMAIL, STORE_EMAIL, OWNER_EMAIL)
+
+
+def reset_passwords(password):
+    """Give every demo login the same password, unlock it and clear two-factor. Returns the emails changed."""
+    done = []
+    for email in ALL_EMAILS:
+        user = db.user_by_email(email)
+        if user is None:
+            continue
+        accounts.set_password(user["id"], password)
+        db.update_user(user["id"], active=True, pending=False)
+        db.set_totp(user["id"], totp_enabled=False, totp_secret=None, totp_failed=0)
+        done.append(email)
+    return done
 
 
 def database_host():
@@ -138,6 +199,25 @@ def main(ask=input, argv=None):
         with db.batch():
             done = reset_fresh_farm()
         print("Reset." if done else "The fresh demo farm does not exist yet: run this command without --reset-fresh first.")
+        return 0
+    if "--password" in argv:
+        i = argv.index("--password")
+        password = argv[i + 1] if i + 1 < len(argv) else ""
+        try:
+            accounts.check_strength(password)
+        except ValueError as e:
+            print(f"Not changed: {e}.")
+            return 1
+        print(f"This creates any missing demo logins and sets ALL demo logins to that password, in the database at: {database_host()}")
+        if ask("Type the word demo to continue: ").strip().lower() != "demo":
+            print("Cancelled. Nothing changed.")
+            return 1
+        with db.batch():
+            create_demo(password)
+            done = reset_passwords(password)
+        print("Every demo login now uses that password (Email & password tab):")
+        for email in done:
+            print(f"  {email}")
         return 0
     print(f"This writes demo accounts and SIMULATED farm data into the database at: {database_host()}")
     print("Do this only on your separate DEMO project, never on the real farm database.")

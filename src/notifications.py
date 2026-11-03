@@ -3,7 +3,7 @@
 Each item is (text, page). Nothing is stored: the bell is a live "to look at" list, so it can never say
 something is new after it has been dealt with. Farmers hear about alerts, vaccination days and their visits;
 vets about requests waiting for a day and today's visits; head admins about signups, Contact us messages and
-requests nobody has handled by the day the farmer asked for.
+requests nobody has handled by the day the farmer asked for; agrovets about new orders and payments to check.
 """
 from datetime import date, timedelta
 
@@ -57,16 +57,36 @@ def _vet(user, today):
 def _admin(user, today):
     if not accounts.is_head_admin(user):
         return []
+    from src import orgs  # sign-ups, messages and late visits are counted only for this admin's organisation
+
     items = []
-    pending = len(db.list_pending_users())
+    pending = len(orgs.pending_for(user))
     if pending:
         items.append((f"{_plural(pending, 'signup', 'signups')} waiting for approval.", "pages/7_admin.py"))
-    msgs = db.count_unhandled_messages()
+    msgs = db.count_unhandled_messages() if orgs.is_platform_owner(user) else 0
     if msgs:
         items.append((f"{_plural(msgs, 'Contact us message', 'Contact us messages')} to read.", "pages/7_admin.py"))
-    late = [q for q in db.requests_for_attendance(today) if q["status"] == "open" and q["preferred_date"] < today]
+    scope = accounts.admin_scope(user)
+    late = [q for q in db.requests_for_attendance(today) if q["status"] == "open" and q["preferred_date"] < today
+            and (scope is None or q["route_id"] in scope)]
     if late:
         items.append((f"{_plural(len(late), 'request is', 'requests are')} still open past the day the farmer asked for.", "pages/10_attendance.py"))
+    return items
+
+
+def _agrovet(user, today):
+    """New orders and payments to check: the shop's alert until WhatsApp is switched on."""
+    waiting = db.orders_for_agrovet(user["id"], ("requested",))
+    confirmed = db.orders_for_agrovet(user["id"], ("confirmed",))
+    items = []
+    if waiting:
+        items.append((f"{_plural(len(waiting), 'new order', 'new orders')} from farmers to confirm.", "pages/17_orders.py"))
+    paid = [o for o in confirmed if o["payment_status"] == "reported"]
+    if paid:
+        items.append((f"{_plural(len(paid), 'M-Pesa payment', 'M-Pesa payments')} to check.", "pages/17_orders.py"))
+    ready = [o for o in confirmed if o["ready_on"] == today]
+    if ready:
+        items.append((f"{_plural(len(ready), 'order', 'orders')} to hand over today.", "pages/17_orders.py"))
     return items
 
 
@@ -75,7 +95,7 @@ def for_user(user, today=None):
     today = today or date.today()
     try:
         role = user.get("role")
-        items = _farmer(user, today) if role == "farmer" else _vet(user, today) if role == "vet" else _admin(user, today) if role == "admin" else []
+        items = {"farmer": _farmer, "vet": _vet, "admin": _admin, "agrovet": _agrovet}.get(role, lambda u, t: [])(user, today)
     except Exception:
         return []
     return items[:MAX_ITEMS]
