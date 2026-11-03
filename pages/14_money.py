@@ -1,5 +1,5 @@
 """Money. Farmer: this month's statement, what is owed to whom, and costs from any supplier.
-Vet: who owes me, taking payments, and correcting a wrong bill. The app records money; it moves none."""
+Vet or agrovet: who owes me, taking payments, and correcting a wrong bill. The app records money; it moves none."""
 from datetime import date, timedelta
 
 import streamlit as st
@@ -11,7 +11,7 @@ from src.auth import require_login
 from src.ui import cap, md
 
 st.set_page_config(page_title="Money", page_icon=ICON, layout="centered")
-user = require_login(roles=("farmer", "vet"))
+user = require_login(roles=("farmer", "vet", "agrovet"))
 
 
 def kes(x):
@@ -61,10 +61,11 @@ def charge_line(c, safe=md):
 
 today = date.today()
 
-# --- the vet ------------------------------------------------------------------------------------
-if user["role"] == "vet":
+# --- the vet or agrovet -------------------------------------------------------------------------
+if user["role"] in ("vet", "agrovet"):
     st.title("Money")
-    st.caption("Bills you raised when marking visits done. Payments go straight to you; this is your record.")
+    st.caption(("Bills you raised when marking visits done." if user["role"] == "vet" else "Bills from orders you handed over.")
+               + " Payments go straight to you; this is your record.")
     mine = db.charges_for_provider(user["id"], credit_only=True)
     owing = ledger.debtors(mine, today)
     c1, c2 = st.columns(2)
@@ -83,7 +84,7 @@ if user["role"] == "vet":
     st.header("Recent bills")
     recent = db.charges_for_provider(user["id"], limit=30)
     if not recent:
-        st.caption("No bills yet. Add a fee or drugs when you mark a visit done.")
+        st.caption("No bills yet." + (" Add a fee or drugs when you mark a visit done." if user["role"] == "vet" else ""))
     for c in recent:
         with st.container(border=True):
             st.markdown(f"**{md(c['farm_name'] or c['farmer_name'])}** · " + charge_line(c))

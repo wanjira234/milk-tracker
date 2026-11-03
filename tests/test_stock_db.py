@@ -124,3 +124,11 @@ def test_a_feed_purchase_replaces_the_feed_log_cost_on_the_statement(world):
     stock.record_purchase(u, f, world["napier"], "1", TODAY, supplier="Kamau", terms="paid", method="cash", today=TODAY)
     after = ledger.statement(0, None, db.month_feed_spend(f, start), db.charges_for_farm(f, start, TODAY), [], TODAY)
     assert not after["feed_from_log"] and after["total_costs"] == 5000
+
+
+def test_deleting_a_farm_with_paid_purchases_removes_everything(world):
+    stock.record_purchase(world["user_a"], world["farm_a"], world["napier"], "1", TODAY, supplier="Kamau", terms="paid",
+                          method="cash", today=TODAY)
+    db.delete_farm(world["farm_a"])
+    assert db._query("SELECT COUNT(*) AS n FROM feed_purchases", one=True)["n"] == 0
+    assert db._query("SELECT COUNT(*) AS n FROM charges", one=True)["n"] == 0

@@ -8,12 +8,13 @@ Kenya's dairy sector rests on smallholders: more than one million of them produc
 
 ## What it does
 
-Three roles, each with its own menu and its own data:
+Four roles, each with its own menu and its own data:
 
 | Role | What they do |
 |---|---|
 | **Farmer** | Logs milk (3 milkings a day), feed and water in litres; uses a feed calculator (truck load to price per mtungi or kg); sees feed margin and AI semen cost; keeps herd records (cows, heifers, calves, breeding, dry period, deworming); asks the route vet, or a vet of their own choosing, for AI, a sick-cow visit or anything else; books vaccination days; reads outbreak alerts; receives SMS advice; on **Feed stock**, records loads as they arrive and when they finish, in their own units (a truck, a bag), and sees what is left and when each feed runs out; on **Money**, sees the month's milk income, the buyer's deductions and expected payout, what is owed to whom, and records costs from any supplier (agrovet, the buyer's store). |
 | **Vet** | Keeps a priced semen list; sees a "my day" sheet with the visits, the farms and what to carry; schedules and completes visits (an AI visit also records the service on the cow) and bills them: fee, drugs and semen, paid now, on credit or (route vets only) deducted from the milk payment; on **Money**, sees who owes them and records payments; posts vaccination days and alerts for their own routes. |
+| **Agrovet** | Keeps a priced product list; receives farmers' pre-orders and confirms them at that day's prices (or declines, saying why); sees what's ready each day, deliveries grouped by route; hands over and bills the order (paid now or on credit), which also restocks the farm's Feed stock; on **Money**, sees who owes it; sees its own customers, best first. |
 | **Admin** (the milk buyer) | Creates routes and allocates vets; approves sign-ups; posts outbreak alerts and vaccination days for any route; texts alerts; sees each vet's attended, to-do and late visits for the day. | A route admin is an admin limited to the routes the head admin gives them: they see those routes' attendance, send alerts and vaccination days for them, and cannot reach set-up, sign-ups or deletes. |
 
 #### Neutral between providers
@@ -64,7 +65,7 @@ pip install -r requirements.txt
 cp .env.example .env                     # then fill in your values (never commit .env)
 psql "$DATABASE_URL" -f sql/schema.sql   # on Supabase: SQL editor, then "Run and enable RLS"
 streamlit run app.py
-python -m src.demo_seed                  # demo admin, vet, a farmer with 40 days of simulated data, and a second farm one day short of advice
+python -m src.demo_seed                  # demo admin, vet, agrovet, a farmer with 40 days of simulated data, and a second farm one day short of advice
 python -m src.demo_seed --reset-fresh    # put that second farm back to its 15 simulated days (judges add to it)
 ```
 
