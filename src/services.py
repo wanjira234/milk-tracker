@@ -182,6 +182,8 @@ def complete_request(request_id, vet_user, notes=None, semen_id=None, today=None
     done = {**q, **fields, "semen_name": semen["name"] if semen else q["semen_name"]}
     charges, payment = ledger.bill_for_visit(done, vet_user, lines, terms or default_terms(q), due_on, method, reference, today)
     with db.batch():  # all or nothing: the visit, the cow's record and the bill
+        if db.lock_request_status(request_id) not in ("open", "scheduled"):  # someone finished it meanwhile
+            raise ValueError("this request is already closed")
         if semen is not None:
             farm_semen = db.add_semen(q["farmer_id"], semen["name"])  # the farm's own list, so the cow's record names it
             me.record_breeding_event(q["farmer_id"], q["cow_id"], today, "served", farm_semen, today=today)

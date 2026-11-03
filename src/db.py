@@ -962,6 +962,13 @@ def has_open_request(farmer_id, cow_id, kind):
     ) is not None
 
 
+def lock_request_status(request_id):
+    """Inside a transaction (db.batch): lock the request row until commit and return its current status,
+    so two clicks on "done" can't both pass the open-request check and bill the visit twice."""
+    row = _query("SELECT status FROM service_requests WHERE id = %s FOR UPDATE", (request_id,), one=True)
+    return row["status"] if row else None
+
+
 def update_request(request_id, **fields):
     allowed = {"status", "scheduled_for", "semen_id", "semen_price_kes", "done_on", "done_by_user_id", "vet_notes"}
     bad = set(fields) - allowed

@@ -306,3 +306,31 @@ def test_the_statement_from_the_database(world):
     s = ledger.statement(db.month_litres(f, start, TODAY), db.get_milk_price(f), 0, db.charges_for_farm(f, start, TODAY),
                          db.open_credit_for_farm(f), TODAY)
     assert s["income"] == 3000 and s["deductions"] == 1500 and s["expected_payout"] == 1500 and s["owed_total"] == 2000
+
+
+def test_two_clicks_on_done_at_once_bill_the_visit_once(world):
+    rid = sick_visit(world)
+    results = []
+
+    def done():
+        try:
+            services.complete_request(rid, world["kibet"], today=TODAY, lines=[("vet_visit", "500", "")])
+            results.append("ok")
+        except ValueError:
+            results.append("refused")
+
+    threads = [threading.Thread(target=done) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert sorted(results) == ["ok", "refused"] and len(db.charges_for_request(rid)) == 1
+
+
+def test_deleting_a_farm_also_removes_its_money_records(world):
+    credit_visit(world)
+    ledger.record_farm_cost(world["user_a"], world["farm_a"], "Mboga Center", "agrovet", "500", TODAY, "paid",
+                            method="cash", today=TODAY)
+    db.delete_farm(world["farm_a"])
+    assert db._query("SELECT COUNT(*) AS n FROM charges", one=True)["n"] == 0
+    assert db._query("SELECT COUNT(*) AS n FROM charge_payments", one=True)["n"] == 0
