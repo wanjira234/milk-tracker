@@ -724,15 +724,17 @@ def log_sms(farmer_id, body, status="queued", provider_ref=None, kind="other"):
     )
 
 
-def recent_sms(farmer_id, days=30):
-    """Messages sent (not failed) to a farmer in the last `days` days: kind and sent_at, newest first."""
+def recent_sms(farmer_id, days=30, as_of=None):
+    """Messages sent (not failed) to a farmer in the `days` days up to `as_of` (default: now):
+    kind and sent_at, newest first."""
     return _query(
         """
         SELECT kind, sent_at FROM sms_log
-        WHERE farmer_id = %s AND status = 'sent' AND sent_at > now() - make_interval(days => %s)
+        WHERE farmer_id = %s AND status = 'sent'
+          AND sent_at > COALESCE(%s::timestamptz, now()) - make_interval(days => %s)
         ORDER BY sent_at DESC
         """,
-        (farmer_id, days),
+        (farmer_id, as_of, days),
     )
 
 
