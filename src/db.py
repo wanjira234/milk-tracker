@@ -1133,13 +1133,14 @@ def payments_for_charge(charge_id):
 
 
 def void_charge(charge_id, user_id, reason):
-    """Cancel a wrong charge (kept, marked void, with who and why). Only while nothing has been paid on it.
+    """Cancel a wrong charge (kept, marked void, with who and why). A credit charge only while nothing has
+    been paid on it; a paid-now charge any time (its payment was part of the same entry, and stays on record).
     Returns True if it was voided."""
     row = _query(
         """
         UPDATE charges SET voided_at = now(), voided_by_user_id = %s, void_reason = %s
         WHERE id = %s AND voided_at IS NULL
-          AND NOT EXISTS (SELECT 1 FROM charge_payments p WHERE p.charge_id = charges.id)
+          AND (terms <> 'credit' OR NOT EXISTS (SELECT 1 FROM charge_payments p WHERE p.charge_id = charges.id))
         RETURNING id
         """,
         (user_id, reason, charge_id), one=True,

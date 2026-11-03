@@ -7,7 +7,7 @@ Logic only (no Streamlit). The app records money; it never moves it. Rules that 
   - a vet raises charges only on their own visits and takes payments only on their own charges;
   - a farmer records their own costs (any supplier, with or without a login) and payments on those;
   - nobody can pay more than is owed, and a wrong charge is voided (kept, with who and why), never
-    deleted, and only while nothing has been paid on it;
+    deleted; a credit charge only while nothing has been paid on it;
   - a buyer's admin sees none of this: what a farm spends elsewhere is the farmer's business.
 
 The statement and debtor views at the bottom are pure functions of rows, tested without a database.

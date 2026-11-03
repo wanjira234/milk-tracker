@@ -95,3 +95,11 @@ def test_debtors_put_the_longest_overdue_farm_first():
     assert [r["farmer_id"] for r in d] == [2, 1]
     assert d[0]["owed"] == 700 and d[0]["overdue"] == 700 and d[0]["days_overdue"] == 20
     assert d[1]["overdue"] == 0 and d[1]["days_overdue"] == 0
+
+
+def test_typed_text_cannot_become_a_link_or_formatting():
+    from src.ui import md
+
+    assert md("[pay here](http://x.io)") == "\\[pay here\\]\\(http\\://x\\.io\\)"
+    assert md("**Mboga** Center") == "\\*\\*Mboga\\*\\* Center"
+    assert md(None) == ""

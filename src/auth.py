@@ -332,10 +332,10 @@ MENU = {
     "route_admin": [("app.py", "Home"), ("pages/10_attendance.py", "Attendance")] + _COMMON + _ACCOUNT,
     # Daily jobs first, then the vet and notices; the set-up pages come last because the Home checklist leads there.
     "farmer": [("app.py", "Home"), ("pages/2_feed_log.py", "Feed log"), ("pages/1_dashboard.py", "Dashboard"),
-               ("pages/9_ask_the_vet.py", "Ask the vet")] + _COMMON
+               ("pages/9_ask_the_vet.py", "Ask the vet"), ("pages/14_money.py", "Money")] + _COMMON
               + [("pages/5_cows.py", "Cows"), ("pages/3_budget.py", "Budget"), ("pages/4_farm_setup.py", "Farm setup")] + _ACCOUNT,
     # The vet works from My day; a farm's dashboard and cow records are the farmer's own view.
-    "vet": [("app.py", "Home"), ("pages/8_my_day.py", "My day")] + _COMMON + _ACCOUNT,
+    "vet": [("app.py", "Home"), ("pages/8_my_day.py", "My day"), ("pages/14_money.py", "Money")] + _COMMON + _ACCOUNT,
     # The admin runs the business and sees no farm-data pages: to see a farmer's view, log in as that farmer.
     "admin": [("app.py", "Home"), ("pages/7_admin.py", "Admin"), ("pages/10_attendance.py", "Attendance")] + _COMMON
              + _ACCOUNT,

@@ -270,11 +270,18 @@ def test_a_wrong_charge_is_voided_with_a_reason_and_kept(world):
         ledger.record_payment(world["wanjiku"], cid, "100", "cash", today=TODAY)
 
 
-def test_a_charge_with_payments_cannot_be_voided(world):
+def test_a_credit_charge_with_payments_cannot_be_voided(world):
     cid = credit_visit(world)
     ledger.record_payment(world["wanjiku"], cid, "100", "cash", today=TODAY)
     with pytest.raises(ValueError, match="payments on it"):
         ledger.void_charge(world["wanjiku"], cid, "oops")
+
+
+def test_a_mistyped_paid_now_cost_can_be_cancelled(world):
+    cid = ledger.record_farm_cost(world["user_a"], world["farm_a"], "Mboga Center", "agrovet", "5000", TODAY, "paid",
+                                  method="cash", today=TODAY)
+    ledger.void_charge(world["user_a"], cid, "it was 500, not 5000")
+    assert db.charges_for_farm(world["farm_a"]) == [] and len(db.payments_for_charge(cid)) == 1  # the payment stays on record
 
 
 def test_the_database_refuses_a_charge_for_another_farms_visit(world):
