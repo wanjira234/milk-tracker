@@ -724,17 +724,15 @@ def log_sms(farmer_id, body, status="queued", provider_ref=None, kind="other"):
     )
 
 
-def recent_sms(farmer_id, days=30, as_of=None):
-    """Messages sent (not failed) to a farmer in the `days` days up to `as_of` (default: now):
-    kind and sent_at, newest first."""
+def recent_sms(farmer_id, days=30):
+    """Messages sent (not failed) to a farmer in the last `days` days: kind and sent_at, newest first."""
     return _query(
         """
         SELECT kind, sent_at FROM sms_log
-        WHERE farmer_id = %s AND status = 'sent'
-          AND sent_at > COALESCE(%s::timestamptz, now()) - make_interval(days => %s)
+        WHERE farmer_id = %s AND status = 'sent' AND sent_at > now() - make_interval(days => %s)
         ORDER BY sent_at DESC
         """,
-        (farmer_id, as_of, days),
+        (farmer_id, days),
     )
 
 
@@ -897,27 +895,25 @@ REQUEST_SELECT = """
     SELECT q.id, q.farmer_id, q.cow_id, q.kind, q.notes, q.preferred_date, q.status, q.scheduled_for,
            q.semen_id, q.semen_price_kes, q.done_on, q.done_by_user_id, q.vet_notes, q.created_at,
            f.name AS farmer_name, f.farm_name, f.phone AS farmer_phone, r.code AS route_code, r.id AS route_id,
-           COALESCE(q.chosen_vet_id, r.vet_user_id) AS vet_user_id, v.name AS vet_name, c.tag AS cow_tag,
-           s.name AS semen_name, q.vaccination_day_id, q.animals, vd.vaccine, q.chosen_vet_id
+           r.vet_user_id AS vet_user_id, v.name AS vet_name, c.tag AS cow_tag, s.name AS semen_name,
+           q.vaccination_day_id, q.animals, vd.vaccine
     FROM service_requests q
     JOIN farmers f ON f.id = q.farmer_id
     LEFT JOIN routes r ON r.id = f.route_id
-    LEFT JOIN users v ON v.id = COALESCE(q.chosen_vet_id, r.vet_user_id)
+    LEFT JOIN users v ON v.id = r.vet_user_id
     LEFT JOIN cows c ON c.id = q.cow_id
     LEFT JOIN vet_semen s ON s.id = q.semen_id
     LEFT JOIN vaccination_days vd ON vd.id = q.vaccination_day_id
 """
 
 
-def add_request(farmer_id, kind, preferred_date, cow_id=None, semen_id=None, semen_price_kes=None, notes=None,
-                chosen_vet_id=None):
-    """chosen_vet_id None = the farm's route vet answers (and follows any change of route vet)."""
+def add_request(farmer_id, kind, preferred_date, cow_id=None, semen_id=None, semen_price_kes=None, notes=None):
     return _query(
         """
-        INSERT INTO service_requests (farmer_id, cow_id, kind, notes, preferred_date, semen_id, semen_price_kes, chosen_vet_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id
+        INSERT INTO service_requests (farmer_id, cow_id, kind, notes, preferred_date, semen_id, semen_price_kes)
+        VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id
         """,
-        (farmer_id, cow_id, kind, notes, preferred_date, semen_id, semen_price_kes, chosen_vet_id), one=True,
+        (farmer_id, cow_id, kind, notes, preferred_date, semen_id, semen_price_kes), one=True,
     )["id"]
 
 
@@ -930,20 +926,18 @@ def requests_for_farm(farmer_id, limit=50):
 
 
 def requests_for_vet(vet_user_id, statuses):
-    """Requests this vet answers (chosen by the farmer, or from farms on their routes), oldest wish first."""
+    """Requests from farms on this vet's routes, oldest wish first."""
     return _query(
-        REQUEST_SELECT + " WHERE COALESCE(q.chosen_vet_id, r.vet_user_id) = %s AND q.status = ANY(%s) "
+        REQUEST_SELECT + " WHERE r.vet_user_id = %s AND q.status = ANY(%s) "
         "ORDER BY COALESCE(q.scheduled_for, q.preferred_date), q.id",
         (vet_user_id, list(statuses)),
     )
 
 
 def requests_for_attendance(day):
-    """Everything still to do, plus what was finished on `day`: the admin's attended-or-not view.
-    Only route-vet requests: a visit by a vet the farmer chose themselves is not the buyer's business."""
+    """Everything still to do, plus what was finished on `day`: the admin's attended-or-not view."""
     return _query(
-        REQUEST_SELECT + " WHERE q.chosen_vet_id IS NULL AND "
-        "(q.status IN ('open', 'scheduled') OR (q.status = 'done' AND q.done_on = %s)) "
+        REQUEST_SELECT + " WHERE q.status IN ('open', 'scheduled') OR (q.status = 'done' AND q.done_on = %s) "
         "ORDER BY COALESCE(q.scheduled_for, q.preferred_date), q.id",
         (day,),
     )
@@ -960,13 +954,6 @@ def has_open_request(farmer_id, cow_id, kind):
         "SELECT 1 FROM service_requests WHERE farmer_id = %s AND cow_id = %s AND kind = %s AND status IN ('open', 'scheduled')",
         (farmer_id, cow_id, kind), one=True,
     ) is not None
-
-
-def lock_request_status(request_id):
-    """Inside a transaction (db.batch): lock the request row until commit and return its current status,
-    so two clicks on "done" can't both pass the open-request check and bill the visit twice."""
-    row = _query("SELECT status FROM service_requests WHERE id = %s FOR UPDATE", (request_id,), one=True)
-    return row["status"] if row else None
 
 
 def update_request(request_id, **fields):
@@ -986,182 +973,6 @@ def semen_cost(farmer_id, start, end):
         (farmer_id, start, end), one=True,
     )
     return float(row["kes"]), int(row["n"])
-
-
-# --- the farmer's own vets ------------------------------------------------------------------------
-
-
-def add_farm_vet(farmer_id, vet_user_id):
-    _query("INSERT INTO farm_vets (farmer_id, vet_user_id) VALUES (%s, %s) ON CONFLICT DO NOTHING", (farmer_id, vet_user_id))
-
-
-def remove_farm_vet(farmer_id, vet_user_id):
-    _query("DELETE FROM farm_vets WHERE farmer_id = %s AND vet_user_id = %s", (farmer_id, vet_user_id))
-
-
-def farm_vets(farmer_id):
-    """Vets this farm added itself (active vet logins only), by name. Never their contact details
-    beyond the phone the farmer used to add them."""
-    return _query(
-        """
-        SELECT u.id, u.name, u.phone FROM farm_vets fv JOIN users u ON u.id = fv.vet_user_id
-        WHERE fv.farmer_id = %s AND u.role = 'vet' AND u.active AND NOT u.pending
-        ORDER BY u.name, u.id
-        """,
-        (farmer_id,),
-    )
-
-
-def is_farm_vet(farmer_id, vet_user_id):
-    return _query(
-        """
-        SELECT 1 FROM farm_vets fv JOIN users u ON u.id = fv.vet_user_id
-        WHERE fv.farmer_id = %s AND fv.vet_user_id = %s AND u.role = 'vet' AND u.active AND NOT u.pending
-        """,
-        (farmer_id, vet_user_id), one=True,
-    ) is not None
-
-
-# --- the money ledger: charges and payments ------------------------------------------------------
-# Payments that must not overshoot a charge are written inside one transaction that first locks the
-# charge row (SELECT ... FOR UPDATE), so two clicks at once can't both pay off the same balance.
-
-CHARGE_SELECT = """
-    SELECT c.id, c.farmer_id, c.provider_user_id, c.provider_name, c.category, c.description, c.amount_kes,
-           c.charged_on, c.terms, c.due_on, c.request_id, c.created_by_user_id, c.created_at,
-           c.voided_at, c.voided_by_user_id, c.void_reason,
-           f.name AS farmer_name, f.farm_name, f.phone AS farmer_phone,
-           COALESCE((SELECT SUM(p.amount_kes) FROM charge_payments p WHERE p.charge_id = c.id), 0) AS paid_kes
-    FROM charges c JOIN farmers f ON f.id = c.farmer_id
-"""
-
-_CHARGE_COLUMNS = ("farmer_id", "provider_user_id", "provider_name", "category", "description", "amount_kes",
-                   "charged_on", "terms", "due_on", "request_id", "created_by_user_id")
-
-
-def _insert_charge(cur, charge):
-    cols = ", ".join(_CHARGE_COLUMNS)
-    cur.execute(f"INSERT INTO charges ({cols}) VALUES ({', '.join(['%s'] * len(_CHARGE_COLUMNS))}) RETURNING id",
-                tuple(charge.get(k) for k in _CHARGE_COLUMNS))
-    return cur.fetchone()[0]
-
-
-def _insert_payment(cur, charge_id, payment):
-    cur.execute(
-        "INSERT INTO charge_payments (charge_id, amount_kes, paid_on, method, reference, recorded_by_user_id) "
-        "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-        (charge_id, payment["amount_kes"], payment["paid_on"], payment["method"], payment.get("reference"),
-         payment.get("recorded_by_user_id")),
-    )
-    return cur.fetchone()[0]
-
-
-def add_charges(charges, payment_for_each=None):
-    """Insert several charges in ONE transaction (all or nothing). If `payment_for_each` is given
-    (method, paid_on, reference, recorded_by_user_id), each charge is also paid in full at once.
-    Returns the new charge ids."""
-    ids = []
-    with get_conn() as conn, conn.cursor() as cur:
-        for charge in charges:
-            cid = _insert_charge(cur, charge)
-            if payment_for_each is not None:
-                _insert_payment(cur, cid, {**payment_for_each, "amount_kes": charge["amount_kes"]})
-            ids.append(cid)
-    clear_cache()
-    return ids
-
-
-def add_payment(charge_id, amount_kes, paid_on, method, reference=None, recorded_by_user_id=None):
-    """Record a payment against a credit charge, never past what is still owed. Returns the payment id.
-    Raises ValueError if the charge is gone, voided, not on credit, or the amount is more than the balance."""
-    with get_conn() as conn, conn.cursor() as cur:
-        cur.execute("SELECT amount_kes, terms, voided_at FROM charges WHERE id = %s FOR UPDATE", (charge_id,))
-        row = cur.fetchone()
-        if row is None:
-            raise ValueError("that charge does not exist")
-        amount, terms, voided_at = row
-        if voided_at is not None:
-            raise ValueError("that charge was cancelled")
-        if terms != "credit":
-            raise ValueError("only a charge on credit takes payments")
-        cur.execute("SELECT COALESCE(SUM(amount_kes), 0) FROM charge_payments WHERE charge_id = %s", (charge_id,))
-        owed = amount - cur.fetchone()[0]
-        if amount_kes > owed:
-            raise ValueError(f"only KES {owed:,.0f} is still owed on this charge")
-        pid = _insert_payment(cur, charge_id, {"amount_kes": amount_kes, "paid_on": paid_on, "method": method,
-                                               "reference": reference, "recorded_by_user_id": recorded_by_user_id})
-    clear_cache()
-    return pid
-
-
-def get_charge(charge_id):
-    return _query(CHARGE_SELECT + " WHERE c.id = %s", (charge_id,), one=True)
-
-
-def charges_for_farm(farmer_id, start=None, end=None, include_voided=False):
-    """A farm's charges, newest first; optionally only those charged from `start` to `end` inclusive."""
-    sql, args = CHARGE_SELECT + " WHERE c.farmer_id = %s", [farmer_id]
-    if start is not None:
-        sql, args = sql + " AND c.charged_on >= %s", args + [start]
-    if end is not None:
-        sql, args = sql + " AND c.charged_on <= %s", args + [end]
-    if not include_voided:
-        sql += " AND c.voided_at IS NULL"
-    return _query(sql + " ORDER BY c.charged_on DESC, c.id DESC", tuple(args))
-
-
-def open_credit_for_farm(farmer_id):
-    """Every credit charge on this farm that still has something owed, oldest due first (any month)."""
-    return _query(
-        "SELECT * FROM (" + CHARGE_SELECT + " WHERE c.farmer_id = %s AND c.terms = 'credit' AND c.voided_at IS NULL) x "
-        "WHERE x.paid_kes < x.amount_kes ORDER BY x.due_on, x.id",
-        (farmer_id,),
-    )
-
-
-def charges_for_provider(provider_user_id, credit_only=False, limit=200):
-    """Charges this vet (or agrovet) raised, newest first. Never another provider's."""
-    sql = CHARGE_SELECT + " WHERE c.provider_user_id = %s AND c.voided_at IS NULL"
-    if credit_only:
-        sql += " AND c.terms = 'credit'"
-    return _query(sql + " ORDER BY c.charged_on DESC, c.id DESC LIMIT %s", (provider_user_id, limit))
-
-
-def charges_for_request(request_id):
-    return _query(CHARGE_SELECT + " WHERE c.request_id = %s AND c.voided_at IS NULL ORDER BY c.id", (request_id,))
-
-
-def payments_for_charge(charge_id):
-    return _query(
-        "SELECT id, amount_kes, paid_on, method, reference, recorded_by_user_id, created_at FROM charge_payments "
-        "WHERE charge_id = %s ORDER BY paid_on, id",
-        (charge_id,),
-    )
-
-
-def void_charge(charge_id, user_id, reason):
-    """Cancel a wrong charge (kept, marked void, with who and why). A credit charge only while nothing has
-    been paid on it; a paid-now charge any time (its payment was part of the same entry, and stays on record).
-    Returns True if it was voided."""
-    row = _query(
-        """
-        UPDATE charges SET voided_at = now(), voided_by_user_id = %s, void_reason = %s
-        WHERE id = %s AND voided_at IS NULL
-          AND (terms <> 'credit' OR NOT EXISTS (SELECT 1 FROM charge_payments p WHERE p.charge_id = charges.id))
-        RETURNING id
-        """,
-        (user_id, reason, charge_id), one=True,
-    )
-    return row is not None
-
-
-def month_litres(farmer_id, start, end):
-    """Litres recorded from `start` to `end` inclusive, every milking counted (what the buyer pays on)."""
-    row = _query(
-        "SELECT COALESCE(SUM(litres), 0) AS litres FROM yield_logs WHERE farmer_id = %s AND log_date BETWEEN %s AND %s",
-        (farmer_id, start, end), one=True,
-    )
-    return float(row["litres"])
 
 
 # --- alerts and the SMS outbox -------------------------------------------------------------------

@@ -12,15 +12,11 @@ Three roles, each with its own menu and its own data:
 
 | Role | What they do |
 |---|---|
-| **Farmer** | Logs milk (3 milkings a day), feed and water in litres; uses a feed calculator (truck load to price per mtungi or kg); sees feed margin and AI semen cost; keeps herd records (cows, heifers, calves, breeding, dry period, deworming); asks the route vet, or a vet of their own choosing, for AI, a sick-cow visit or anything else; books vaccination days; reads outbreak alerts; receives SMS advice; on **Money**, sees the month's milk income, the buyer's deductions and expected payout, what is owed to whom, and records costs from any supplier (agrovet, the buyer's store). |
-| **Vet** | Keeps a priced semen list; sees a "my day" sheet with the visits, the farms and what to carry; schedules and completes visits (an AI visit also records the service on the cow) and bills them: fee, drugs and semen, paid now, on credit or (route vets only) deducted from the milk payment; on **Money**, sees who owes them and records payments; posts vaccination days and alerts for their own routes. |
+| **Farmer** | Logs milk (3 milkings a day), feed and water in litres; uses a feed calculator (truck load to price per mtungi or kg); sees feed margin and AI semen cost; keeps herd records (cows, heifers, calves, breeding, dry period, deworming); asks the vet for AI, a sick-cow visit or anything else; books vaccination days; reads outbreak alerts; receives SMS advice. |
+| **Vet** | Keeps a priced semen list; sees a "my day" sheet with the visits, the farms and what to carry; schedules and completes visits (an AI visit also records the service on the cow); posts vaccination days and alerts for their own routes. |
 | **Admin** (the milk buyer) | Creates routes and allocates vets; approves sign-ups; posts outbreak alerts and vaccination days for any route; texts alerts; sees each vet's attended, to-do and late visits for the day. | A route admin is an admin limited to the routes the head admin gives them: they see those routes' attendance, send alerts and vaccination days for them, and cannot reach set-up, sign-ups or deletes. |
 
-#### Neutral between providers
-
-A farm on a buyer's route keeps the route vet as the default, and can add independent vets and send any request to one of them. Each cost records who supplied it and how it is settled, so the farmer sees the buyer's month-end deductions before payday and their full costs in one place. The buyer's admin sees only route-vet requests, never what a farm spends elsewhere. The app records money; it never moves or holds it.
-
-## How the feed advice works
+### How the feed advice works
 
 The advice is deliberately cautious. A per-farm model estimates what each feed does to milk, and a message is sent only when the evidence is clear.
 

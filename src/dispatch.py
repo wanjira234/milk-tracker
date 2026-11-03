@@ -12,7 +12,7 @@ Only messages that were actually sent count. One farmer failing never stops the 
 """
 import json
 import math
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
 from src import db
@@ -42,12 +42,8 @@ def throttle(kind, recent, today):
     return True, None
 
 
-def _recent(farmer_id, today):
-    # Look back from the end of the day being planned, not from the wall clock, so a dry run or
-    # a re-run for an earlier day sees the same history the live run would have seen.
-    end_of_day = datetime.combine(today + timedelta(days=1), time.min, tzinfo=TZ)
-    rows = db.recent_sms(farmer_id, as_of=end_of_day)
-    return [{"kind": r["kind"], "day": r["sent_at"].astimezone(TZ).date()} for r in rows]
+def _recent(farmer_id):
+    return [{"kind": r["kind"], "day": r["sent_at"].astimezone(TZ).date()} for r in db.recent_sms(farmer_id)]
 
 
 def plan_for_farmer(farmer, today, *, recent=None, assessment=None):
@@ -61,7 +57,7 @@ def plan_for_farmer(farmer, today, *, recent=None, assessment=None):
         return {"action": "skip", "reason": "nothing to say"}
     if facts["kind"] == "advice" and (facts["gain"] or 0) < MIN_GAIN_KES:
         return {"action": "skip", "reason": f"gain under KES {MIN_GAIN_KES} a day"}
-    ok, reason = throttle(facts["kind"], _recent(farmer["id"], today) if recent is None else recent, today)
+    ok, reason = throttle(facts["kind"], _recent(farmer["id"]) if recent is None else recent, today)
     if not ok:
         return {"action": "skip", "reason": reason}
     return {"action": "send", "facts": facts}

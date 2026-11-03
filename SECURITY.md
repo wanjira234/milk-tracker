@@ -21,17 +21,8 @@ What is protected, how, and what is not done yet. The application-level items un
 **Data**
 - All SQL values are passed as parameters. The few dynamic parts of a query (column names in an update) come from fixed whitelists, never from user input.
 - Composite foreign keys make the database refuse a record that points at another farm's cow, semen or calf.
-- A vet can act only on service requests for their own routes or sent to them by a farmer who added them, and on alerts and vaccination days for their own routes; a farmer can cancel only their own requests, and can send a request only to their route vet or a vet they added. These checks are on the server side and tested, including with another vet's and another farm's ids.
+- A vet can act only on service requests, alerts and vaccination days for their own routes; a farmer can cancel only their own requests. These checks are on the server side and tested, including with another vet's and another farm's ids.
 - On Supabase the schema is run with "Run and enable RLS", so the public API keys cannot read the tables. The app connects server-side through the connection pooler.
-
-**Money records (charges and payments)**
-- The app records money; it never moves or holds it. Payments go directly between farmer and vet or supplier.
-- A vet can bill only their own visits and take payments only on their own bills; a farmer records costs and payments only for their own farm, and cannot mark a vet's bill paid. Only a route vet's bill may be set to come off the milk payment. All checked server-side in `src/ledger.py` and tested with other farms', vets' and farmers' ids.
-- A payment can never exceed what is owed: it is written in one transaction that first locks the charge row, so two payments at once cannot both succeed (tested with two threads). Marking a visit done locks the request the same way, so a double click cannot bill it twice (tested).
-- Money records are not deleted by the app. A wrong charge is voided and kept, with who voided it, when and why; a credit charge only while nothing has been paid on it. Deleting a whole farm (head admin only) does remove its money records with it.
-- A charge for a visit must belong to the same farm as the visit (composite foreign key), and a visit with money recorded against it cannot be deleted on its own.
-- A milk buyer's admin does not see the ledger, or requests a farmer sent to a vet of their own choosing.
-- Text other people typed (supplier names, vets' notes, farm and vet names) is escaped before it is shown, so it cannot turn into a link or formatting.
 
 **Secrets**
 - Keys and passwords live only in `.env` (git-ignored) or the host's secrets store, never in the code or the repo. The app stays locked if no owner password or admin phone is configured.
@@ -57,8 +48,7 @@ See [docs/SSDLC.md](docs/SSDLC.md) for the risk assessment, threat model and tes
 
 - No email or phone verification at sign-up (the admin's approval is the check).
 - No password-reset flow. Two-factor login is optional, not forced, and the SMS-code and owner-password logins do not use it. The authenticator key is stored in the database (protected by row-level security), not encrypted by the app.
-- No general audit log of who changed what. Money records keep who created, paid and voided each entry, but other edits are not logged.
-- Payment details are typed in by hand (an M-Pesa code is optional and not checked against M-Pesa). Before money flows through a payment gateway, confirmations must come from the gateway, not from what a person types.
+- No audit log of who changed what.
 - The app relies on Streamlit Community Cloud for HTTPS and on Supabase for database backups; neither is configured or tested by us.
 - Phone numbers and farm records are personal data. A data-protection review (Kenya's Data Protection Act, consent and retention) has not been done and should happen before real farmers are onboarded at scale.
 - The Africa's Talking account is a sandbox: SMS reaches the simulator, not real phones, until a live account is set up.
