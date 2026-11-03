@@ -75,8 +75,6 @@ pages/6_account.py, 7_admin.py  My login; admin: routes, vets, farm-to-route, cr
 src/services.py             Service requests (AI, sick cow, other, vaccination): farmer asks, route vet schedules/completes, carry list, day sheet, admin attendance; AI completion records the service on the cow and the semen cost
 src/alerts.py               Outbreak alerts and notices: who may post, who sees them, one-time confirmed SMS send, SMS outbox
 src/vaccinations.py         Vaccination days: post, book animals (becomes a vaccination visit on the vet's day sheet), cancel
-src/ledger.py               Money ledger: farm costs, visit bills, payments, voids, permission checks; pure month statement and vet debtors
-pages/14_money.py           Money (farmer and vet); src/ui.md() escapes text other people typed before it is shown as markdown
 src/demo_seed.py            `python -m src.demo_seed`: demo admin, vet and farmer with simulated data (asks to confirm the database host; use a separate demo database)
 pages/8_my_day.py (vet), 9_ask_the_vet.py (farmer), 10_attendance.py (admin), 11_alerts.py, 12_vaccination.py   Role pages; menus per role live in src/auth.py (MENU)
 README.md, SECURITY.md      For judges and readers: what it is, architecture, what is protected and what is not
@@ -112,15 +110,6 @@ tests/test_suggestions.py   Tests for the suggestion logic
 - Farmers are on basic phones and many are older. Anything farmer-facing is SMS or very simple. The Streamlit dashboard is for the owner, family and demos.
 
 ## Current status
-
-**Summary (3 Nov 2026).** Everything below this summary is the build history in order; where it says "still to build", check this summary first. Built and live on `main` for the FNB hackathon: logging (milk, feed, water), farm setup and feed calculator, dashboard with profit and the real model's feed signal, budget, per-cow records, SMS advice and dispatch jobs, accounts with farmer/vet/admin and route admins, service requests and the vet's day, alerts, vaccination days, public pages. Built on branch `phase-1-providers` (not merged yet): vet choice and the money ledger (below). Still to build: purchases and stock forecasting (Phase 2), agrovet role and pre-orders (Phase 3), payments gateway and subscriptions (Phase 4), dairy goats (Phase 5), the AI assistant (Phase 6), the Fresha SMS screenshot reader, a "what changed" before/after view.
-
-**Phase 1: vet choice and the money ledger (3 Nov 2026, branch `phase-1-providers`).**
-- Decision: the app is the farmer's, neutral between providers. A buyer's route vet stays the default; a farmer may add independent vets (`farm_vets`, by the vet's phone) and send any request to one (`service_requests.chosen_vet_id`; NULL = route vet). The buyer's attendance view shows only route-vet requests.
-- Money: `charges` (what a farm owes, with who supplied it and terms: `paid`, `credit` with `due_on`, or `milk_deduction`) and `charge_payments`. The app records money, never moves it. Only route vets' bills may be milk deductions. Vets bill visits when marking them done (fee, drugs, and the AI semen at the agreed price) in one transaction with the visit; farmers record costs from any supplier, with or without a login.
-- Rules: no overpaying (payment locks the charge row); no double billing (completion locks the request row); wrong charges are voided with who and why, never deleted (credit ones only while unpaid; paid-now ones any time); a charge's visit must be on the same farm (composite FK). Logic and permission checks in `src/ledger.py`; pages `pages/14_money.py` (farmer statement and costs; vet debtors and payments), plus vet choice on Ask the vet and billing on My day.
-- The dashboard's semen figure still comes from the requests (unchanged); the Money page reads only the ledger, so semen counts once on each page.
-- Re-run `sql/schema.sql` (with RLS) on a database before deploying this branch's code to it.
 
 - Scaffold exists. Foundation layer done and tested: `.gitignore`, `requirements.txt`, `.env.example`, Streamlit theme, `sql/schema.sql` (idempotent), `src/db.py`, `tests/test_db.py` (7 passing).
 - Schema is herd-level: one `farmers` row is one farm; yield is per milking session (morning/afternoon/evening), unique per farmer/date/session.

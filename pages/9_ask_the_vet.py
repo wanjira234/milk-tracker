@@ -7,30 +7,23 @@ from src.messages import ICON
 
 from src import db, services
 from src.auth import require_login
-from src.ui import cap, farmer_selector, md
+from src.ui import cap, farmer_selector
 
 st.set_page_config(page_title="Ask the vet", page_icon=ICON, layout="centered")
 user = require_login(roles=("farmer",))
 farmer_id = farmer_selector()
 
 st.title("Ask the vet")
-route_vet_id = db.route_vet_id(farmer_id)
-route_vet = db.get_user(route_vet_id) if route_vet_id else None
-choices = services.vets_for_farm(farmer_id)  # [(None = route vet, label), (vet id, name), ...]
-chosen = None
-if len(choices) > 1:
-    labels = dict(choices)
-    chosen = st.selectbox("Send to", list(labels), format_func=labels.get, key="req_vet")
-if chosen is None:
-    if route_vet:
-        st.caption(f"Your vet: **{route_vet['name']}**")
-    else:
-        st.warning("No vet is allocated to your route yet. You can still ask: the request waits until one is.")
-answering = chosen if chosen is not None else route_vet_id
+vet_id = db.route_vet_id(farmer_id)
+vet = db.get_user(vet_id) if vet_id else None
+if vet:
+    st.caption(f"Your vet: **{vet['name']}**")
+else:
+    st.warning("No vet is allocated to your route yet. You can still ask: the request waits until one is.")
 
 kind = st.radio("What do you need?", list(services.FARMER_KINDS), format_func=services.KINDS.get, horizontal=True, key="req_kind")
 cows = [c for c in db.list_cows(farmer_id) if not (kind == "ai" and c["kind"] == "calf")]
-semen_list = db.list_vet_semen(answering) if answering else []
+semen_list = db.list_vet_semen(vet_id) if vet_id else []
 
 with st.form("ask_vet", clear_on_submit=True):
     cow_id = semen_id = None
@@ -43,13 +36,12 @@ with st.form("ask_vet", clear_on_submit=True):
         names = {s["id"]: f"{s['name']} (KES {float(s['price_kes']):,.0f})" for s in semen_list}
         semen_id = st.selectbox("Semen", list(names), index=None, placeholder="Choose, or leave for the vet to advise",
                                 format_func=names.get, key="req_semen")
-        st.caption("The semen price is taken off your monthly milk payment by your milk buyer, and shows in your profit."
-                   if chosen is None else "You pay this vet directly: the bill shows under Money once the visit is done.")
+        st.caption("The semen price is taken off your monthly milk payment by Fresha, and shows in your profit.")
     when = st.date_input("Best day", value=date.today(), key="req_day")
     notes = st.text_area("Notes" + ("" if kind == "other" else " (optional)"), max_chars=300, key="req_notes")
     if st.form_submit_button("Send request", type="primary"):
         try:
-            services.request_service(farmer_id, kind, when, cow_id, semen_id, notes, vet_id=chosen)
+            services.request_service(farmer_id, kind, when, cow_id, semen_id, notes)
         except ValueError as e:
             st.error(cap(e))
         else:
@@ -65,7 +57,6 @@ for q in rows:
     with st.container(border=True):
         st.markdown(
             f"**{services.KINDS[q['kind']]}**" + (f" · {q['cow_tag']}" if q["cow_tag"] else "")
-            + (f" · {md(q['vet_name'])}" if q["chosen_vet_id"] is not None and q["vet_name"] else "")
             + f" · {services.STATUS_WORDS[q['status']]}" + (f" ({when})" if q["status"] in ("open", "scheduled") else "")
         )
         if q["vaccine"]:
@@ -81,24 +72,3 @@ for q in rows:
                 st.error(cap(e))
             else:
                 st.rerun()
-
-st.header("My vets")
-st.caption("Use a vet who is not your route vet? Add them by their phone number. They need a Maziwa Plus vet login. "
-           "Your milk buyer does not see requests you send to your own vets.")
-mine = db.farm_vets(farmer_id)
-for v in mine:
-    c1, c2 = st.columns([4, 1])
-    c1.write(md(v["name"]))
-    if c2.button("Remove", key=f"drop_vet_{v['id']}"):
-        db.remove_farm_vet(farmer_id, v["id"])
-        st.rerun()
-with st.form("add_vet", clear_on_submit=True):
-    phone = st.text_input("Vet's phone number", placeholder="0712 345 678", key="vet_phone")
-    if st.form_submit_button("Add vet"):
-        try:
-            services.add_own_vet(farmer_id, phone)
-        except ValueError as e:
-            st.error(cap(e))
-        else:
-            st.success("Added. You can now send requests to this vet.")
-            st.rerun()

@@ -35,12 +35,3 @@ def cap(message):
     """Uppercase the first letter only (str.capitalize() would lowercase 'Kenyan')."""
     message = str(message)
     return message[:1].upper() + message[1:]
-
-
-_MD_SPECIAL = set("\\`*_{}[]()#+-.!|<>~$:")
-
-
-def md(text):
-    """Text someone else typed (a supplier, a vet's note, a farm name), made safe to show inside st.markdown
-    or st.write: every markdown character is escaped, so it can't turn into a link, an image or formatting."""
-    return "".join("\\" + ch if ch in _MD_SPECIAL else ch for ch in str(text or ""))
