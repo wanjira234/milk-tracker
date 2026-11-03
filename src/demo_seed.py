@@ -1,4 +1,4 @@
-"""Demo data for the judges: one admin, one vet, one farmer with 40 days of records.
+"""Demo data for the judges: one admin, one vet, one farmer with 40 days of records, and a demo agrovet.
 
     python -m src.demo_seed          # prints the three logins and a password, once
 
@@ -23,6 +23,10 @@ FRESH_EMAIL = "newfarm@demo.milk"
 FRESH_FARM_PHONE = "+254700000998"
 FRESH_DAYS = 15
 FRESH_NOISE = 0.6  # less day-to-day wobble than the 40-day farm, so 14 days are enough for a clear result
+# A demo agrovet with a short product list, already added by the demo farmer, so a pre-order can be shown end to end.
+AGROVET_EMAIL = "agrovet@demo.milk"
+AGROVET_PHONE = "+254700000997"
+AGROVET_PRODUCTS = (("Dairy meal", "70 kg bag", 2600), ("Maize germ", "70 kg bag", 1800), ("Mineral lick", "block", 900))
 
 
 def seed_logs(farmer_id, today=None, days=40, seed=7, skip=0, noise=2.0):
@@ -101,6 +105,14 @@ def create_demo(password=None, today=None):
         accounts.assign_route(farm_id, route)
         accounts.create_account("farmer", "Baba Demo", email=FRESH_EMAIL, temp_password=password, farmer_id=farm_id)
         made[FRESH_EMAIL] = password
+    if not db.user_by_email(AGROVET_EMAIL):
+        shop_id = accounts.create_account("agrovet", "Demo Agrovet", phone=AGROVET_PHONE, email=AGROVET_EMAIL, temp_password=password)
+        made[AGROVET_EMAIL] = password
+        for name, unit, price in AGROVET_PRODUCTS:
+            db.upsert_product(shop_id, name, unit, price)
+        demo_farm = db.farmer_by_phone(DEMO_FARM_PHONE)
+        if demo_farm is not None:
+            db.add_farm_agrovet(demo_farm["id"], shop_id)
     # demo logins skip the forced password change: judges should get straight in
     for email in made:
         db.update_user(db.user_by_email(email)["id"], must_change_password=False)

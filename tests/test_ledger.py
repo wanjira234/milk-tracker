@@ -103,3 +103,10 @@ def test_typed_text_cannot_become_a_link_or_formatting():
     assert md("[pay here](http://x.io)") == "\\[pay here\\]\\(http\\://x\\.io\\)"
     assert md("**Mboga** Center") == "\\*\\*Mboga\\*\\* Center"
     assert md(None) == ""
+
+
+def test_feed_is_counted_once_purchases_win_over_the_feed_log():
+    from_log = ledger.statement(100.0, Decimal("50"), 3000, [charge(terms="paid", category="agrovet")], [], TODAY)
+    assert from_log["feed_from_log"] and from_log["total_costs"] == 3000 + 1000
+    bought = ledger.statement(100.0, Decimal("50"), 3000, [charge(terms="paid", category="feed", amount_kes=Decimal("5000"))], [], TODAY)
+    assert not bought["feed_from_log"] and bought["total_costs"] == 5000

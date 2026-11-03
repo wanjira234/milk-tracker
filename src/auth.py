@@ -258,13 +258,16 @@ def _tab_signup():
     from src import accounts
 
     st.caption("Three quick steps: sign up here, the milk buyer's admin approves you, then log in on the Email & password tab.")
-    role = st.radio("I am a", ["farmer", "vet"], horizontal=True, key="su_role")  # outside the form so the fields change
+    role = st.radio("I am a", ["farmer", "vet", "agrovet"], horizontal=True, key="su_role")  # outside the form so the fields change
     with st.form("signup", clear_on_submit=True):
         name = st.text_input("Your name", key="su_name", autocomplete="name")
         phone = farm = None
         if role == "farmer":
             phone = st.text_input("Phone", placeholder="0712 345 678", key="su_phone", help="Your SMS advice and alerts come to this number.")
             farm = st.text_input("Farm name (optional)", key="su_farm")
+        elif role == "agrovet":
+            phone = st.text_input("Shop phone", placeholder="0712 345 678", key="su_phone",
+                                  help="Farmers add your shop by this number to send you pre-orders.")
         email = st.text_input("Email", key="su_email", autocomplete="username")
         pw = st.text_input("Choose a password (at least 8 characters)", type="password", key="su_pw", autocomplete="new-password")
         if st.form_submit_button("Sign up", type="primary"):
@@ -276,8 +279,8 @@ def _tab_signup():
                 st.success(
                     "You are signed up. The admin has to approve you before you can log in. "
                     "Once approved, log in on the Email & password tab. "
-                    + ("Your Home page will then guide you through setting up your farm." if role == "farmer"
-                       else "Your My day page will show your route's visits.")
+                    + {"farmer": "Your Home page will then guide you through setting up your farm.",
+                       "agrovet": "Your Orders page is where farmers' pre-orders arrive."}.get(role, "Your My day page will show your route's visits.")
                 )
 
 
@@ -332,10 +335,13 @@ MENU = {
     "route_admin": [("app.py", "Home"), ("pages/10_attendance.py", "Attendance")] + _COMMON + _ACCOUNT,
     # Daily jobs first, then the vet and notices; the set-up pages come last because the Home checklist leads there.
     "farmer": [("app.py", "Home"), ("pages/2_feed_log.py", "Feed log"), ("pages/1_dashboard.py", "Dashboard"),
+               ("pages/15_stock.py", "Feed stock"), ("pages/16_order.py", "Order"),
                ("pages/9_ask_the_vet.py", "Ask the vet"), ("pages/14_money.py", "Money")] + _COMMON
               + [("pages/5_cows.py", "Cows"), ("pages/3_budget.py", "Budget"), ("pages/4_farm_setup.py", "Farm setup")] + _ACCOUNT,
     # The vet works from My day; a farm's dashboard and cow records are the farmer's own view.
     "vet": [("app.py", "Home"), ("pages/8_my_day.py", "My day"), ("pages/14_money.py", "Money")] + _COMMON + _ACCOUNT,
+    # An agrovet works from its orders; it sees farms only through the orders they place with it.
+    "agrovet": [("app.py", "Home"), ("pages/17_orders.py", "Orders"), ("pages/14_money.py", "Money")] + _COMMON + _ACCOUNT,
     # The admin runs the business and sees no farm-data pages: to see a farmer's view, log in as that farmer.
     "admin": [("app.py", "Home"), ("pages/7_admin.py", "Admin"), ("pages/10_attendance.py", "Attendance")] + _COMMON
              + _ACCOUNT,

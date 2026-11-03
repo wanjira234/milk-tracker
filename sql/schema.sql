@@ -436,3 +436,133 @@ CREATE TABLE IF NOT EXISTS charge_payments (
     created_at          TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_payments_charge ON charge_payments (charge_id);
+
+-- ---------------------------------------------------------------------------
+-- Phase 2: feed bought, feed left, and when it runs out.
+--   A purchase is recorded in the farm's own unit (a truck load, a bag) and its kg is worked out
+--   from the catalogue at the time, like a feed entry. A purchase with a price also becomes a
+--   charge in the money ledger (category 'feed'), so it shows on the Money page.
+--   A count says how much of a feed is left on a day ("finished" = 0): stock is the last count,
+--   plus what was bought after it, minus what was fed after it.
+-- ---------------------------------------------------------------------------
+ALTER TABLE feed_catalogue ADD COLUMN IF NOT EXISTS lead_days INTEGER NOT NULL DEFAULT 3
+    CHECK (lead_days BETWEEN 0 AND 60);  -- warn this many days before it runs out
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'feed_catalogue_id_farmer_key') THEN
+        ALTER TABLE feed_catalogue ADD CONSTRAINT feed_catalogue_id_farmer_key UNIQUE (id, farmer_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'charges_id_farmer_key') THEN
+        ALTER TABLE charges ADD CONSTRAINT charges_id_farmer_key UNIQUE (id, farmer_id);
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS feed_purchases (
+    id                 SERIAL PRIMARY KEY,
+    farmer_id          INTEGER       NOT NULL REFERENCES farmers(id) ON DELETE CASCADE,
+    catalogue_id       INTEGER       NOT NULL,
+    purchased_on       DATE          NOT NULL,
+    units              NUMERIC(8,2)  NOT NULL CHECK (units > 0 AND units <= 10000),
+    kg                 NUMERIC(10,2) NOT NULL CHECK (kg > 0),
+    cost_kes           NUMERIC(10,2) CHECK (cost_kes IS NULL OR cost_kes >= 0),
+    charge_id          INTEGER,
+    created_by_user_id INTEGER       REFERENCES users(id) ON DELETE SET NULL,
+    created_at         TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    FOREIGN KEY (catalogue_id, farmer_id) REFERENCES feed_catalogue (id, farmer_id) ON DELETE CASCADE,
+    FOREIGN KEY (charge_id, farmer_id) REFERENCES charges (id, farmer_id)
+);
+CREATE INDEX IF NOT EXISTS idx_purchases_item ON feed_purchases (farmer_id, catalogue_id, purchased_on);
+
+CREATE TABLE IF NOT EXISTS feed_stock_counts (
+    id           SERIAL PRIMARY KEY,
+    farmer_id    INTEGER       NOT NULL REFERENCES farmers(id) ON DELETE CASCADE,
+    catalogue_id INTEGER       NOT NULL,
+    counted_on   DATE          NOT NULL,
+    kg           NUMERIC(10,2) NOT NULL CHECK (kg >= 0),   -- 0 = finished
+    created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    FOREIGN KEY (catalogue_id, farmer_id) REFERENCES feed_catalogue (id, farmer_id) ON DELETE CASCADE,
+    UNIQUE (catalogue_id, counted_on)                      -- one count a day per feed; a second replaces it
+);
+
+-- ---------------------------------------------------------------------------
+-- Phase 3: agrovets and pre-orders.
+--   An agrovet is its own login (role 'agrovet'), approved by an admin like a vet. It keeps a priced
+--   product list. A farmer adds the agrovets they use (by phone) and pre-orders from them; the agrovet
+--   confirms (prices are copied onto the order then, so a later price change can't alter it), and
+--   when the goods are collected or delivered, bills the order into the money ledger. A line the
+--   farmer tied to one of their feeds also updates Feed stock. Names are copied onto orders, so the
+--   farmer's history reads right even if the agrovet's login or a product goes.
+-- ---------------------------------------------------------------------------
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_role_check'
+               AND pg_get_constraintdef(oid) NOT LIKE '%agrovet%') THEN
+        ALTER TABLE users DROP CONSTRAINT users_role_check;
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_role_check') THEN
+        ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin', 'vet', 'farmer', 'agrovet'));
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS agrovet_products (
+    id              SERIAL PRIMARY KEY,
+    agrovet_user_id INTEGER       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name            TEXT          NOT NULL CHECK (length(name) BETWEEN 1 AND 80),
+    unit            TEXT          NOT NULL CHECK (length(unit) BETWEEN 1 AND 30),   -- e.g. '70 kg bag'
+    price_kes       NUMERIC(10,2) NOT NULL CHECK (price_kes > 0 AND price_kes <= 1000000),
+    active          BOOLEAN       NOT NULL DEFAULT TRUE,
+    UNIQUE (agrovet_user_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS farm_agrovets (
+    farmer_id       INTEGER     NOT NULL REFERENCES farmers(id) ON DELETE CASCADE,
+    agrovet_user_id INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    added_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (farmer_id, agrovet_user_id)
+);
+
+CREATE TABLE IF NOT EXISTS orders (
+    id              SERIAL PRIMARY KEY,
+    farmer_id       INTEGER     NOT NULL REFERENCES farmers(id) ON DELETE CASCADE,
+    agrovet_user_id INTEGER     REFERENCES users(id) ON DELETE SET NULL,
+    agrovet_name    TEXT        NOT NULL CHECK (length(agrovet_name) BETWEEN 1 AND 80),
+    status          TEXT        NOT NULL DEFAULT 'requested'
+                    CHECK (status IN ('requested', 'confirmed', 'collected', 'cancelled', 'declined')),
+    fulfilment      TEXT        NOT NULL CHECK (fulfilment IN ('pickup', 'delivery')),
+    wanted_on       DATE        NOT NULL,
+    ready_on        DATE,
+    notes           TEXT        CHECK (notes IS NULL OR length(notes) <= 300),
+    agrovet_note    TEXT        CHECK (agrovet_note IS NULL OR length(agrovet_note) <= 300),
+    collected_on    DATE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (status <> 'confirmed' OR ready_on IS NOT NULL),
+    CHECK (status <> 'collected' OR collected_on IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_orders_agrovet ON orders (agrovet_user_id, status, ready_on);
+CREATE INDEX IF NOT EXISTS idx_orders_farm    ON orders (farmer_id, created_at);
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'orders_id_farmer_key') THEN
+        ALTER TABLE orders ADD CONSTRAINT orders_id_farmer_key UNIQUE (id, farmer_id);
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS order_lines (
+    id             SERIAL PRIMARY KEY,
+    order_id       INTEGER       NOT NULL,
+    farmer_id      INTEGER       NOT NULL,
+    product_id     INTEGER       REFERENCES agrovet_products(id) ON DELETE SET NULL,
+    product_name   TEXT          NOT NULL CHECK (length(product_name) BETWEEN 1 AND 80),
+    unit           TEXT          NOT NULL CHECK (length(unit) BETWEEN 1 AND 30),
+    qty            NUMERIC(8,2)  NOT NULL CHECK (qty > 0 AND qty <= 1000),
+    unit_price_kes NUMERIC(10,2) CHECK (unit_price_kes IS NULL OR unit_price_kes > 0),  -- set when confirmed
+    catalogue_id   INTEGER,      -- the farm's own feed this line restocks, if any
+    charge_id      INTEGER,      -- the bill for this line, once collected
+    FOREIGN KEY (order_id, farmer_id) REFERENCES orders (id, farmer_id) ON DELETE CASCADE,
+    -- deferred: checked at commit, so deleting a whole farm (which cascades through orders, feeds and
+    -- charges in no fixed order) succeeds, while deleting a feed or charge an order still uses does not
+    FOREIGN KEY (catalogue_id, farmer_id) REFERENCES feed_catalogue (id, farmer_id) DEFERRABLE INITIALLY DEFERRED,
+    FOREIGN KEY (charge_id, farmer_id) REFERENCES charges (id, farmer_id) DEFERRABLE INITIALLY DEFERRED
+);
+CREATE INDEX IF NOT EXISTS idx_order_lines_order ON order_lines (order_id);

@@ -5,10 +5,10 @@ import streamlit as st
 
 from src.messages import ICON
 
-from src import accounts, db, services
+from src import accounts, db, services, stock
 from src.onboarding import checklist, next_step
 from src.ingestion.manual_entry import normalize_phone
-from src.ui import cap, farmer_selector
+from src.ui import cap, farmer_selector, md
 from src.auth import require_login
 
 st.set_page_config(page_title="Maziwa Plus", page_icon=ICON, layout="centered")
@@ -16,7 +16,8 @@ user = require_login()
 
 first_name = (user.get("name") or "").split()[0] if (user.get("name") or "").split() else ""
 st.title(f"Hello, {first_name}" if first_name and user["id"] is not None else "Welcome")
-st.caption({"farmer": "Your farm today.", "vet": "Your visits today.", "admin": "The milk route at a glance."}.get(user["role"], ""))
+st.caption({"farmer": "Your farm today.", "vet": "Your visits today.", "admin": "The milk route at a glance.",
+            "agrovet": "Your farmers' orders today."}.get(user["role"], ""))
 
 
 def add_farmer_form():
@@ -68,6 +69,15 @@ if user["role"] == "vet":
     c3.metric("Waiting for a day", len(services.inbox(user)))
     st.write("Open **My day** for today's farms, what to carry and your semen list.")
     st.stop()
+if user["role"] == "agrovet":
+    ready = [o for o in db.orders_for_agrovet(user["id"], ("confirmed",)) if o["ready_on"] == date.today()]
+    c1, c2, c3 = st.columns(3)
+    c1.metric("New orders", len(db.orders_for_agrovet(user["id"], ("requested",))))
+    c2.metric("Ready today", len(ready))
+    c3.metric("Products listed", len(db.list_products(user["id"])))
+    st.write("Open **Orders** to confirm new orders, hand over today's, and keep your product list. "
+             "**Money** shows who owes you.")
+    st.stop()
 if not farmers:
     st.info("No farm is linked to your login yet. Ask your admin.")
 if farmers:
@@ -94,6 +104,10 @@ if farmers:
                 mark = "✅" if ok else ("👉" if key == upcoming[0] else "⬜")
                 st.markdown(f"{mark} **{label}**" + ("" if ok else f" — {why}"))
             st.page_link(upcoming[3], label=f"Next: {upcoming[1]}", icon="➡️")
+
+    for r in stock.running_low(farmer_id, today):
+        when = "today" if r["days_left"] < 1 else f"in about {int(r['days_left'])} day{'s' if int(r['days_left']) != 1 else ''}"
+        st.warning(f"**{md(r['name'])}** runs out {when}. Open **Feed stock** to see what's left.")
 
     c1, c2 = st.columns(2)
     c1.metric("Milk today (litres)", f"{float(todays['litres']):.1f}" if todays else "no entry")
