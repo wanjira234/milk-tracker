@@ -128,8 +128,9 @@ def test_each_role_gets_its_own_menu_and_every_page_is_reachable_by_someone():
     farm_pages = {"Dashboard", "Feed log", "Budget", "Farm setup", "Cows"}
     assert not farm_pages & set(labels("admin")), "an admin sees a farm only by logging in as that farmer"
     assert farm_pages <= set(labels("farmer")) and not farm_pages & set(labels("vet"))
-    for role in MENU:  # alerts and vaccination are for everyone, and every link points at a real file
-        assert {"Alerts", "Vaccination", "Home", "Account"} <= set(labels(role))
+    for role in MENU:  # alerts and vaccination are for everyone but agrovets, and every link points at a real file
+        assert {"Home", "Account"} <= set(labels(role))
+        assert ({"Alerts", "Vaccination"} <= set(labels(role))) == (role != "agrovet")
         assert all(os.path.exists(os.path.join(ROOT, path)) for path, _ in menu_for(role))
     reachable = {path for role in MENU for path, _ in menu_for(role)}
     assert reachable == {"app.py"} | set(glob.glob("pages/*.py")), "a page exists that no role can reach, or a menu link is dead"

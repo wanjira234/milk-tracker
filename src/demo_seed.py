@@ -27,6 +27,13 @@ FRESH_NOISE = 0.6  # less day-to-day wobble than the 40-day farm, so 14 days are
 AGROVET_EMAIL = "agrovet@demo.milk"
 AGROVET_PHONE = "+254700000997"
 AGROVET_PRODUCTS = (("Dairy meal", "70 kg bag", 2600), ("Maize germ", "70 kg bag", 1800), ("Mineral lick", "block", 900))
+# The milk buyer as an organisation, its own store (the only shop that can take payment from milk money),
+# and a platform-owner login that sees every organisation.
+DEMO_ORG = "Fresha (demo)"
+STORE_EMAIL, STORE_PHONE = "store@demo.milk", "+254700000996"
+STORE_PRODUCTS = (("Dairy meal", "70 kg bag", 2550), ("Mineral lick", "block", 850))
+OWNER_EMAIL = "owner@demo.milk"
+DEMO_TOWN = "Limuru"
 
 
 def seed_logs(farmer_id, today=None, days=40, seed=7, skip=0, noise=2.0):
@@ -113,6 +120,27 @@ def create_demo(password=None, today=None):
         demo_farm = db.farmer_by_phone(DEMO_FARM_PHONE)
         if demo_farm is not None:
             db.add_farm_agrovet(demo_farm["id"], shop_id)
+    # organisations, towns and tills (safe to re-run: each step only sets what it says)
+    org_id = db.add_org(DEMO_ORG)
+    db.set_route_org(route, org_id)
+    db.set_user_org(db.user_by_email(ADMIN_EMAIL)["id"], org_id)
+    for phone in (DEMO_FARM_PHONE, FRESH_FARM_PHONE):
+        farm = db.farmer_by_phone(phone)
+        if farm is not None and not farm.get("town"):
+            db.set_farm_town(farm["id"], DEMO_TOWN)
+    shop = db.user_by_email(AGROVET_EMAIL)
+    if shop is not None and not shop.get("town"):
+        db.set_shop_profile(shop["id"], DEMO_TOWN, "till", "123456", None)
+    if not db.user_by_email(STORE_EMAIL):
+        store_id = accounts.create_account("agrovet", "Fresha store (demo)", phone=STORE_PHONE, email=STORE_EMAIL, temp_password=password)
+        made[STORE_EMAIL] = password
+        db.set_user_org(store_id, org_id)
+        db.set_shop_profile(store_id, DEMO_TOWN, "paybill", "400200", None)
+        for name, unit, price in STORE_PRODUCTS:
+            db.upsert_product(store_id, name, unit, price)
+    if not db.user_by_email(OWNER_EMAIL):
+        accounts.create_account("admin", "Demo platform owner", email=OWNER_EMAIL, temp_password=password)
+        made[OWNER_EMAIL] = password
     # demo logins skip the forced password change: judges should get straight in
     for email in made:
         db.update_user(db.user_by_email(email)["id"], must_change_password=False)

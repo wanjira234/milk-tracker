@@ -566,3 +566,54 @@ CREATE TABLE IF NOT EXISTS order_lines (
     FOREIGN KEY (charge_id, farmer_id) REFERENCES charges (id, farmer_id) DEFERRABLE INITIALLY DEFERRED
 );
 CREATE INDEX IF NOT EXISTS idx_order_lines_order ON order_lines (order_id);
+
+-- ---------------------------------------------------------------------------
+-- Phase 4: smoother journeys.
+--   Agrovets list their town and M-Pesa till (or paybill), so farmers pick from a list of shops
+--   (nearest town first) instead of typing a phone number, and know where to pay.
+--   An order says how the farmer will pay: M-Pesa to the shop, cash at collection, or deducted
+--   from the milk payment (the buyer's own store only). For M-Pesa the farmer reports the code and
+--   the agrovet confirms it arrived, so both sides see whether it is paid.
+-- ---------------------------------------------------------------------------
+ALTER TABLE users ADD COLUMN IF NOT EXISTS town TEXT CHECK (town IS NULL OR length(town) <= 60);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pay_kind TEXT CHECK (pay_kind IS NULL OR pay_kind IN ('till', 'paybill'));
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pay_number TEXT CHECK (pay_number IS NULL OR pay_number ~ '^[0-9]{5,10}$');
+ALTER TABLE users ADD COLUMN IF NOT EXISTS pay_account TEXT CHECK (pay_account IS NULL OR length(pay_account) <= 30);
+ALTER TABLE farmers ADD COLUMN IF NOT EXISTS town TEXT CHECK (town IS NULL OR length(town) <= 60);
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_method TEXT NOT NULL DEFAULT 'cash'
+    CHECK (payment_method IN ('mpesa', 'cash', 'milk_deduction'));
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_status TEXT NOT NULL DEFAULT 'unpaid'
+    CHECK (payment_status IN ('unpaid', 'reported', 'received'));
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS mpesa_code TEXT CHECK (mpesa_code IS NULL OR mpesa_code ~ '^[A-Z0-9]{8,12}$');
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_reported_at TIMESTAMPTZ;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS payment_received_at TIMESTAMPTZ;
+-- How many kg one unit of an ordered product is (worked out when the order is placed, from "70 kg bag" or
+-- the farm's own feed unit), so collecting it can restock Feed stock without the farmer converting anything.
+ALTER TABLE order_lines ADD COLUMN IF NOT EXISTS kg_each NUMERIC(10,2) CHECK (kg_each IS NULL OR kg_each > 0);
+
+-- A promotion: a percentage off one product between two dates. Confirming an order in that window
+-- applies it (the price is then copied onto the order like any other).
+CREATE TABLE IF NOT EXISTS promotions (
+    id              SERIAL PRIMARY KEY,
+    agrovet_user_id INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    product_id      INTEGER     NOT NULL REFERENCES agrovet_products(id) ON DELETE CASCADE,
+    percent_off     INTEGER     NOT NULL CHECK (percent_off BETWEEN 1 AND 50),
+    starts_on       DATE        NOT NULL,
+    ends_on         DATE        NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CHECK (ends_on >= starts_on)
+);
+CREATE INDEX IF NOT EXISTS idx_promotions_agrovet ON promotions (agrovet_user_id, ends_on);
+
+-- Organisations: each milk buyer or co-op (Fresha, a co-op) runs its own routes. An admin with an
+-- organisation sees only that organisation's routes, their farms, vets and visits; an admin with none is
+-- the platform owner and sees everything. An agrovet with an organisation is that buyer's own store, the
+-- only kind that may take payment from a farm's milk money (for farms on that buyer's routes).
+CREATE TABLE IF NOT EXISTS orgs (
+    id         SERIAL PRIMARY KEY,
+    name       TEXT        NOT NULL UNIQUE CHECK (length(name) BETWEEN 1 AND 80),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+ALTER TABLE routes ADD COLUMN IF NOT EXISTS org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL;
+ALTER TABLE users  ADD COLUMN IF NOT EXISTS org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL;

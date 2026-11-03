@@ -10,7 +10,7 @@ from src.auth import require_login
 from src.ui import cap, farmer_selector
 
 st.set_page_config(page_title="Vaccination", page_icon=ICON, layout="centered")
-user = require_login()
+user = require_login(roles=("admin", "vet", "farmer"))  # not agrovets: alerts are for farms, vets and buyers
 is_farmer = user["role"] == "farmer"
 farmer_id = farmer_selector() if is_farmer else None
 

@@ -50,16 +50,23 @@ def session_user(row):
     return {
         "id": row["id"], "role": row["role"], "name": row["name"],
         "farmer_id": row["farmer_id"], "must_change_password": bool(row["must_change_password"]),
-        "route_admin": bool(row.get("route_admin")),
+        "route_admin": bool(row.get("route_admin")), "org_id": row.get("org_id"),
     }
 
 
 def admin_scope(user):
-    """None for anyone who may act on every route (the owner and head admins, and non-admins, who are
-    limited elsewhere); for a route admin, the set of route ids they look after, read fresh each time."""
-    if user["role"] == "admin" and user.get("route_admin") and user.get("id") is not None:
-        return db.admin_route_ids(user["id"])
-    return None
+    """None for anyone who may act on every route (the platform owner, and non-admins, who are limited
+    elsewhere); else the set of route ids this admin may act on, read fresh each time: an organisation's
+    admin gets its organisation's routes, a route admin the routes they were given (within their organisation)."""
+    if user["role"] != "admin" or user.get("id") is None:
+        return None
+    scope = None
+    if user.get("org_id") is not None:
+        scope = db.org_route_ids(user["org_id"])
+    if user.get("route_admin"):
+        mine = db.admin_route_ids(user["id"])
+        scope = mine if scope is None else scope & mine
+    return scope
 
 
 def is_head_admin(user):
@@ -371,7 +378,7 @@ SIGNUP_ROLES = ("farmer", "vet", "agrovet")  # admin is never self-service
 MAX_PENDING = 100  # stops a flood of fake signups filling the approval list
 
 
-def signup(role, name, email, password, phone=None, farm_name=None):
+def signup(role, name, email, password, phone=None, farm_name=None, buyer=None):
     """Request a login. It cannot be used until an admin approves it. Returns the new user id."""
     if role not in SIGNUP_ROLES:
         raise ValueError("choose farmer, vet or agrovet")
@@ -389,11 +396,20 @@ def signup(role, name, email, password, phone=None, farm_name=None):
     phone = normalize_phone(phone) if phone else None
     if len(db.list_pending_users()) >= MAX_PENDING:
         raise ValueError("too many signups are waiting: try again later or ask the admin")
+    # a farmer may say who buys their milk; if it matches an organisation, that buyer's admin approves them
+    org_id = None
+    if role == "farmer" and buyer:
+        wanted = " ".join(str(buyer).split()).lower()
+        org_id = next((o["id"] for o in db.list_orgs() if o["name"].lower() == wanted or o["name"].lower().startswith(wanted + " ")
+                       or o["name"].lower().startswith(wanted + "(")), None)
     try:
-        return db.create_user(role, name, phone, email, hash_password(password), None,
-                              active=False, pending=True, farm_name=farm_name)
+        uid = db.create_user(role, name, phone, email, hash_password(password), None,
+                             active=False, pending=True, farm_name=farm_name)
     except psycopg2.errors.UniqueViolation:
         raise ValueError("that email or phone number already has an account or a signup waiting") from None
+    if org_id is not None:
+        db.set_user_org(uid, org_id)
+    return uid
 
 
 def approve_signup(user_id):

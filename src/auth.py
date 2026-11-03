@@ -262,17 +262,21 @@ def _tab_signup():
     with st.form("signup", clear_on_submit=True):
         name = st.text_input("Your name", key="su_name", autocomplete="name")
         phone = farm = None
+        org_id = None
         if role == "farmer":
             phone = st.text_input("Phone", placeholder="0712 345 678", key="su_phone", help="Your SMS advice and alerts come to this number.")
             farm = st.text_input("Farm name (optional)", key="su_farm")
+            # typed, not a list: this screen is shown before login and must not read the database
+            org_id = st.text_input("Who buys your milk? (optional)", placeholder="Fresha", key="su_org",
+                                   help="Your milk buyer's office then approves your sign-up and puts you on your route.")
         elif role == "agrovet":
             phone = st.text_input("Shop phone", placeholder="0712 345 678", key="su_phone",
-                                  help="Farmers add your shop by this number to send you pre-orders.")
+                                  help="So the admin can reach you. You add your town and till after you're approved.")
         email = st.text_input("Email", key="su_email", autocomplete="username")
         pw = st.text_input("Choose a password (at least 8 characters)", type="password", key="su_pw", autocomplete="new-password")
         if st.form_submit_button("Sign up", type="primary"):
             try:
-                accounts.signup(role, name, email, pw, phone or None, farm or None)
+                accounts.signup(role, name, email, pw, phone or None, farm or None, buyer=org_id or None)
             except ValueError as e:
                 st.error(str(e)[:1].upper() + str(e)[1:] + ".")
             else:
@@ -341,7 +345,8 @@ MENU = {
     # The vet works from My day; a farm's dashboard and cow records are the farmer's own view.
     "vet": [("app.py", "Home"), ("pages/8_my_day.py", "My day"), ("pages/14_money.py", "Money")] + _COMMON + _ACCOUNT,
     # An agrovet works from its orders; it sees farms only through the orders they place with it.
-    "agrovet": [("app.py", "Home"), ("pages/17_orders.py", "Orders"), ("pages/14_money.py", "Money")] + _COMMON + _ACCOUNT,
+    # No Alerts or Vaccination: those are for the farms, their vets and their milk buyer.
+    "agrovet": [("app.py", "Home"), ("pages/17_orders.py", "Orders"), ("pages/14_money.py", "Money")] + _ACCOUNT,
     # The admin runs the business and sees no farm-data pages: to see a farmer's view, log in as that farmer.
     "admin": [("app.py", "Home"), ("pages/7_admin.py", "Admin"), ("pages/10_attendance.py", "Attendance")] + _COMMON
              + _ACCOUNT,

@@ -402,7 +402,8 @@ def dewormings(farmer_id):
 
 # --- accounts, routes, login codes -----------------------------------------------
 
-USER_COLUMNS = "id, role, name, phone, email, farmer_id, must_change_password, active, failed_logins, locked_until, pending, farm_name, route_admin"
+USER_COLUMNS = ("id, role, name, phone, email, farmer_id, must_change_password, active, failed_logins, locked_until, pending, "
+                "farm_name, route_admin, town, pay_kind, pay_number, pay_account, org_id")
 
 
 def create_user(role, name, phone=None, email=None, password_hash=None, farmer_id=None, must_change_password=False,
@@ -600,11 +601,15 @@ def add_route(code, name=None):
 def list_routes():
     return _query(
         """
-        SELECT r.id, r.code, r.name, r.vet_user_id, u.name AS vet_name,
+        SELECT r.id, r.code, r.name, r.vet_user_id, u.name AS vet_name, r.org_id, o.name AS org_name,
                (SELECT COUNT(*) FROM farmers f WHERE f.route_id = r.id) AS farms
-        FROM routes r LEFT JOIN users u ON u.id = r.vet_user_id ORDER BY r.code
+        FROM routes r LEFT JOIN users u ON u.id = r.vet_user_id LEFT JOIN orgs o ON o.id = r.org_id ORDER BY r.code
         """
     )
+
+
+def get_route(route_id):
+    return _query("SELECT id, code, name, vet_user_id, org_id FROM routes WHERE id = %s", (route_id,), one=True)
 
 
 def set_route_vet(route_id, vet_user_id):
@@ -1289,6 +1294,37 @@ def is_farm_agrovet(farmer_id, agrovet_user_id):
     return any(a["id"] == agrovet_user_id for a in farm_agrovets(farmer_id))
 
 
+def set_shop_profile(agrovet_user_id, town, pay_kind, pay_number, pay_account):
+    _query("UPDATE users SET town = %s, pay_kind = %s, pay_number = %s, pay_account = %s WHERE id = %s AND role = 'agrovet'",
+           (town, pay_kind, pay_number, pay_account, agrovet_user_id))
+
+
+def set_farm_town(farmer_id, town):
+    _query("UPDATE farmers SET town = %s WHERE id = %s", (town, farmer_id))
+
+
+def list_agrovets(town=None):
+    """Every active, approved agrovet with at least one product: those in `town` first, then by name.
+    Only shop details are returned (name, town, how to pay), never a login's private fields."""
+    return _query(
+        """
+        SELECT u.id, u.name, u.town, u.pay_kind, u.pay_number, u.pay_account,
+               (SELECT COUNT(*) FROM agrovet_products p WHERE p.agrovet_user_id = u.id AND p.active) AS products
+        FROM users u
+        WHERE u.role = 'agrovet' AND u.active AND NOT u.pending
+          AND EXISTS (SELECT 1 FROM agrovet_products p WHERE p.agrovet_user_id = u.id AND p.active)
+        ORDER BY (lower(coalesce(u.town, '')) = lower(coalesce(%s, '-'))) DESC, u.name, u.id
+        """,
+        (town,),
+    )
+
+
+def shop(agrovet_user_id):
+    """One agrovet's public shop details, or None if it isn't an active agrovet."""
+    return _query("SELECT id, name, town, pay_kind, pay_number, pay_account FROM users "
+                  "WHERE id = %s AND role = 'agrovet' AND active AND NOT pending", (agrovet_user_id,), one=True)
+
+
 ORDER_SELECT = """
     SELECT o.*, f.name AS farmer_name, f.farm_name, f.phone AS farmer_phone, r.code AS route_code
     FROM orders o JOIN farmers f ON f.id = o.farmer_id LEFT JOIN routes r ON r.id = f.route_id
@@ -1299,17 +1335,18 @@ def add_order(order, lines):
     """An order and its lines in one transaction. Returns the order id."""
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO orders (farmer_id, agrovet_user_id, agrovet_name, fulfilment, wanted_on, notes) "
-            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+            "INSERT INTO orders (farmer_id, agrovet_user_id, agrovet_name, fulfilment, wanted_on, notes, payment_method) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
             (order["farmer_id"], order["agrovet_user_id"], order["agrovet_name"], order["fulfilment"], order["wanted_on"],
-             order.get("notes")),
+             order.get("notes"), order.get("payment_method", "cash")),
         )
         oid = cur.fetchone()[0]
         for ln in lines:
             cur.execute(
-                "INSERT INTO order_lines (order_id, farmer_id, product_id, product_name, unit, qty, catalogue_id) "
-                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
-                (oid, order["farmer_id"], ln["product_id"], ln["product_name"], ln["unit"], ln["qty"], ln.get("catalogue_id")),
+                "INSERT INTO order_lines (order_id, farmer_id, product_id, product_name, unit, qty, catalogue_id, kg_each) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (oid, order["farmer_id"], ln["product_id"], ln["product_name"], ln["unit"], ln["qty"], ln.get("catalogue_id"),
+                 ln.get("kg_each")),
             )
     clear_cache()
     return oid
@@ -1350,7 +1387,8 @@ def lock_order_status(order_id):
 
 
 def update_order(order_id, **fields):
-    allowed = {"status", "ready_on", "agrovet_note", "collected_on"}
+    allowed = {"status", "ready_on", "agrovet_note", "collected_on", "payment_status", "mpesa_code", "payment_reported_at",
+               "payment_received_at"}
     bad = set(fields) - allowed
     if bad:
         raise ValueError(f"cannot update {sorted(bad)}")
@@ -1364,6 +1402,75 @@ def price_order_line(line_id, unit_price_kes):
 
 def bill_order_line(line_id, charge_id):
     _query("UPDATE order_lines SET charge_id = %s WHERE id = %s", (charge_id, line_id))
+
+
+def add_promotion(agrovet_user_id, product_id, percent_off, starts_on, ends_on):
+    return _query(
+        "INSERT INTO promotions (agrovet_user_id, product_id, percent_off, starts_on, ends_on) VALUES (%s, %s, %s, %s, %s) RETURNING id",
+        (agrovet_user_id, product_id, percent_off, starts_on, ends_on), one=True,
+    )["id"]
+
+
+def promotions_for(agrovet_user_id, today=None):
+    """This agrovet's promotions that haven't ended (all of them, when today is None), with the product name."""
+    sql = ("SELECT pr.*, p.name AS product_name FROM promotions pr JOIN agrovet_products p ON p.id = pr.product_id "
+           "WHERE pr.agrovet_user_id = %s")
+    args = [agrovet_user_id]
+    if today is not None:
+        sql, args = sql + " AND pr.ends_on >= %s", args + [today]
+    return _query(sql + " ORDER BY pr.starts_on, pr.id", tuple(args))
+
+
+def end_promotion(agrovet_user_id, promo_id, today):
+    """End a promotion now (yesterday, so today no longer gets it); only the agrovet's own."""
+    _query("UPDATE promotions SET ends_on = %s::date - 1, starts_on = LEAST(starts_on, %s::date - 1) "
+           "WHERE id = %s AND agrovet_user_id = %s AND ends_on >= %s", (today, today, promo_id, agrovet_user_id, today))
+
+
+def agrovet_sales(agrovet_user_id, start, end):
+    """Collected order lines per product from `start` to `end`: quantity, KES and number of orders, best first."""
+    return _query(
+        """
+        SELECT l.product_name, l.unit, SUM(l.qty) AS qty, SUM(l.qty * l.unit_price_kes) AS kes, COUNT(DISTINCT o.id) AS orders
+        FROM orders o JOIN order_lines l ON l.order_id = o.id
+        WHERE o.agrovet_user_id = %s AND o.status = 'collected' AND o.collected_on BETWEEN %s AND %s
+        GROUP BY l.product_name, l.unit ORDER BY kes DESC, qty DESC
+        """,
+        (agrovet_user_id, start, end),
+    )
+
+
+# --- organisations (milk buyers, co-ops) ---------------------------------------------------------
+
+
+def add_org(name):
+    return _query("INSERT INTO orgs (name) VALUES (%s) ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name RETURNING id",
+                  (name,), one=True)["id"]
+
+
+def list_orgs():
+    return _query("SELECT o.id, o.name, (SELECT COUNT(*) FROM routes r WHERE r.org_id = o.id) AS routes FROM orgs o ORDER BY o.name")
+
+
+def get_org(org_id):
+    return _query("SELECT id, name FROM orgs WHERE id = %s", (org_id,), one=True)
+
+
+def set_route_org(route_id, org_id):
+    _query("UPDATE routes SET org_id = %s WHERE id = %s", (org_id, route_id))
+
+
+def set_user_org(user_id, org_id):
+    _query("UPDATE users SET org_id = %s WHERE id = %s", (org_id, user_id))
+
+
+def org_route_ids(org_id):
+    return {r["id"] for r in _query("SELECT id FROM routes WHERE org_id = %s", (org_id,))}
+
+
+def farm_org_id(farmer_id):
+    row = _query("SELECT r.org_id FROM farmers f JOIN routes r ON r.id = f.route_id WHERE f.id = %s", (farmer_id,), one=True)
+    return row["org_id"] if row else None
 
 
 def agrovet_customers(agrovet_user_id):

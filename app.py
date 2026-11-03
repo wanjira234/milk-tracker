@@ -51,12 +51,18 @@ if user["role"] == "admin":
     c1.metric("Farmers", len(farmers))
     c2.metric("Routes", len(routes))
     c3.metric("Vets", len(vets))
-    if scope is None:
-        c4.metric("Signups waiting", len(db.list_pending_users()))
+    if accounts.is_head_admin(user):
+        from src import orgs
+
+        c4.metric("Signups waiting", len(orgs.pending_for(user)))
+        org = db.get_org(user["org_id"]) if user.get("org_id") else None
+        if org:
+            st.caption(f"{md(org['name'])}: you see only your organisation's routes, farms and vets.")
         st.write("Use **Admin** for routes, vets and sign-ups, **Attendance** for today's visits, "
                  "and **Alerts** or **Vaccination** to notify farmers.")
-        with st.expander("Add a farmer without a login", expanded=not farmers):
-            add_farmer_form()
+        if orgs.is_platform_owner(user):
+            with st.expander("Add a farmer without a login", expanded=not farmers):
+                add_farmer_form()
     else:
         st.write("You look after " + (", ".join(r["code"] for r in routes) or "no routes yet (ask the head admin)")
                  + ". Use **Attendance** for today's visits, and **Alerts** or **Vaccination** to notify farmers.")

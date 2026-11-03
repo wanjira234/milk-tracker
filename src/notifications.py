@@ -57,14 +57,18 @@ def _vet(user, today):
 def _admin(user, today):
     if not accounts.is_head_admin(user):
         return []
+    from src import orgs  # sign-ups, messages and late visits are counted only for this admin's organisation
+
     items = []
-    pending = len(db.list_pending_users())
+    pending = len(orgs.pending_for(user))
     if pending:
         items.append((f"{_plural(pending, 'signup', 'signups')} waiting for approval.", "pages/7_admin.py"))
-    msgs = db.count_unhandled_messages()
+    msgs = db.count_unhandled_messages() if orgs.is_platform_owner(user) else 0
     if msgs:
         items.append((f"{_plural(msgs, 'Contact us message', 'Contact us messages')} to read.", "pages/7_admin.py"))
-    late = [q for q in db.requests_for_attendance(today) if q["status"] == "open" and q["preferred_date"] < today]
+    scope = accounts.admin_scope(user)
+    late = [q for q in db.requests_for_attendance(today) if q["status"] == "open" and q["preferred_date"] < today
+            and (scope is None or q["route_id"] in scope)]
     if late:
         items.append((f"{_plural(len(late), 'request is', 'requests are')} still open past the day the farmer asked for.", "pages/10_attendance.py"))
     return items
