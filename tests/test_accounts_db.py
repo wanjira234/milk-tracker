@@ -311,7 +311,7 @@ def test_a_rejected_signup_disappears_and_an_approved_one_cannot_be_rejected():
 
 def test_nobody_can_sign_up_as_admin_or_with_bad_details():
     for kwargs, why in (
-        (dict(role="admin", name="X", email="x@e.co", password="longenough1"), "farmer or vet"),
+        (dict(role="admin", name="X", email="x@e.co", password="longenough1"), "farmer, vet or agrovet"),
         (dict(role="vet", name=" ", email="x@e.co", password="longenough1"), "name"),
         (dict(role="vet", name="X", email="nope", password="longenough1"), "valid email"),
         (dict(role="vet", name="X", email="x@e.co", password="short"), "at least"),

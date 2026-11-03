@@ -19,7 +19,7 @@ from src import db, logincode, totp
 from src.ingestion.manual_entry import normalize_phone
 from src.passwords import DUMMY_HASH, check_strength, hash_password, verify_password
 
-ROLES = ("admin", "vet", "farmer")
+ROLES = ("admin", "vet", "farmer", "agrovet")
 MAX_FAILED_LOGINS = 5
 LOCKOUT = timedelta(minutes=15)
 _EMAIL = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
@@ -359,28 +359,30 @@ def visible_farmers(user):
         return db.list_farmers() if scope is None else db.farmers_on_routes(scope)
     if user["role"] == "vet":
         return db.farmers_on_vet_routes(user["id"])
+    if user["role"] != "farmer":  # an agrovet sees farms only through the orders placed with it
+        return []
     farm = db.get_farmer(user["farmer_id"]) if user["farmer_id"] else None
     return [farm] if farm and farm["active"] else []
 
 
 # --- self-signup, approved by an admin ------------------------------------------------------
 
-SIGNUP_ROLES = ("farmer", "vet")  # admin is never self-service
+SIGNUP_ROLES = ("farmer", "vet", "agrovet")  # admin is never self-service
 MAX_PENDING = 100  # stops a flood of fake signups filling the approval list
 
 
 def signup(role, name, email, password, phone=None, farm_name=None):
     """Request a login. It cannot be used until an admin approves it. Returns the new user id."""
     if role not in SIGNUP_ROLES:
-        raise ValueError("choose farmer or vet")
+        raise ValueError("choose farmer, vet or agrovet")
     name = " ".join(str(name or "").split())
     if not name or len(name) > 80:
         raise ValueError("enter your name")
     email = normalize_email(email)
     check_strength(password)
+    if role in ("farmer", "agrovet") and not phone:  # farmers get SMS; farmers add an agrovet by its phone
+        raise ValueError("enter your phone number")
     if role == "farmer":
-        if not phone:
-            raise ValueError("enter your phone number")
         farm_name = " ".join(str(farm_name or "").split())[:80] or None
     else:
         farm_name = None

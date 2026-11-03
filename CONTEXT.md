@@ -78,6 +78,7 @@ src/vaccinations.py         Vaccination days: post, book animals (becomes a vacc
 src/ledger.py               Money ledger: farm costs, visit bills, payments, voids, permission checks; pure month statement and vet debtors
 pages/14_money.py           Money (farmer and vet); src/ui.md() escapes text other people typed before it is shown as markdown
 src/stock.py, pages/15_stock.py   Feed stock: purchases and counts in farm units, stock on hand, daily use, days left, low-stock warnings
+src/orders.py, pages/16_order.py, pages/17_orders.py   Agrovet pre-orders: farmer orders, agrovet confirms, hands over and bills; restocks tied feeds
 src/demo_seed.py            `python -m src.demo_seed`: demo admin, vet and farmer with simulated data (asks to confirm the database host; use a separate demo database)
 pages/8_my_day.py (vet), 9_ask_the_vet.py (farmer), 10_attendance.py (admin), 11_alerts.py, 12_vaccination.py   Role pages; menus per role live in src/auth.py (MENU)
 README.md, SECURITY.md      For judges and readers: what it is, architecture, what is protected and what is not
@@ -130,6 +131,13 @@ tests/test_suggestions.py   Tests for the suggestion logic
 - Tables: `feed_purchases`, `feed_stock_counts` (one per feed per day), `feed_catalogue.lead_days`; composite FKs keep purchases, counts and their charges on the same farm. `db.retire_catalogue_item` now needs the farm id (it was not scoped).
 - Files: `src/stock.py` (pure `item_status`, plus recording with checks), `pages/15_stock.py`, a low-stock warning on Home.
 - Not yet: an SMS when a feed is running low (needs a place in the one-SMS-a-day throttle).
+
+**Phase 3: agrovets and pre-orders (3 Nov 2026, branch `phase-3-agrovet`, built on `phase-2-stock`).**
+- New role `agrovet` (self sign-up with a shop phone, admin approval, like a vet). Sees no farm pages: only orders placed with it and the farms that placed them. Menu: Home, Orders, Money.
+- Flow: farmer adds an agrovet by phone (`farm_agrovets`) and orders from its `agrovet_products` (`orders` + `order_lines`), optionally tying a line to one of their own feeds; agrovet confirms with a ready day (prices copied onto the lines then) or declines with a reason; on hand-over each line becomes a charge (paid now or credit; never milk deduction) and a tied line also becomes a feed purchase (one product unit = one unit of the farm's feed), so Feed stock goes up. Confirm and hand-over lock the order row (no double billing).
+- Names are copied onto orders and charges, so a farm's history survives the agrovet deleting its login. Order lines' same-farm foreign keys are DEFERRABLE INITIALLY DEFERRED so deleting a whole farm (cascading in no fixed order) works.
+- Files: `src/orders.py`, `pages/16_order.py` (farmer), `pages/17_orders.py` (agrovet); Money and Home handle the agrovet; the demo seed adds `agrovet@demo.milk` with three products, already added by the demo farm.
+- Not yet: loyalty rules and promotions (the customer list is the start), payment prompts (STK push), SMS to the agrovet on a new order.
 
 - Scaffold exists. Foundation layer done and tested: `.gitignore`, `requirements.txt`, `.env.example`, Streamlit theme, `sql/schema.sql` (idempotent), `src/db.py`, `tests/test_db.py` (7 passing).
 - Schema is herd-level: one `farmers` row is one farm; yield is per milking session (morning/afternoon/evening), unique per farmer/date/session.

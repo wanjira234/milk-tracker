@@ -86,6 +86,8 @@ if user["role"] == "farmer":
     st.warning("This permanently deletes your login, your farm and every record on it: milk, feed, cows, requests. It cannot be undone.")
 elif user["role"] == "vet":
     st.warning("This permanently deletes your login and your semen list. Your route is left without a vet until the admin allocates one.")
+elif user["role"] == "agrovet":
+    st.warning("This permanently deletes your login and your product list. Farmers keep their past orders and bills.")
 else:
     st.warning("This permanently deletes your admin login. You cannot delete the only admin.")
 with st.form("delete_me"):

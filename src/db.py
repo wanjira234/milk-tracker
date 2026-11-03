@@ -812,9 +812,10 @@ def set_lead_days(farmer_id, item_id, days):
 
 def add_feed_purchase(purchase, charge=None, payment=None):
     """A purchase, and its charge (and payment) in the money ledger if it has a price: one transaction.
+    A purchase billed elsewhere (an agrovet order line) passes its existing charge as purchase["charge_id"].
     Returns the purchase id."""
     with get_conn() as conn, conn.cursor() as cur:
-        charge_id = None
+        charge_id = purchase.get("charge_id")
         if charge is not None:
             charge_id = _insert_charge(cur, charge)
             if payment is not None:
@@ -1237,6 +1238,149 @@ def month_litres(farmer_id, start, end):
         (farmer_id, start, end), one=True,
     )
     return float(row["litres"])
+
+
+# --- agrovets and pre-orders --------------------------------------------------------------------
+
+
+def upsert_product(agrovet_user_id, name, unit, price_kes):
+    """Add a product to this agrovet's list, or reprice it (and bring it back). Returns its id."""
+    return _query(
+        """
+        INSERT INTO agrovet_products (agrovet_user_id, name, unit, price_kes) VALUES (%s, %s, %s, %s)
+        ON CONFLICT (agrovet_user_id, name) DO UPDATE SET unit = EXCLUDED.unit, price_kes = EXCLUDED.price_kes, active = TRUE
+        RETURNING id
+        """,
+        (agrovet_user_id, name, unit, price_kes), one=True,
+    )["id"]
+
+
+def list_products(agrovet_user_id, active_only=True):
+    sql = "SELECT * FROM agrovet_products WHERE agrovet_user_id = %s"
+    if active_only:
+        sql += " AND active"
+    return _query(sql + " ORDER BY name", (agrovet_user_id,))
+
+
+def retire_product(agrovet_user_id, product_id):
+    _query("UPDATE agrovet_products SET active = FALSE WHERE id = %s AND agrovet_user_id = %s", (product_id, agrovet_user_id))
+
+
+def add_farm_agrovet(farmer_id, agrovet_user_id):
+    _query("INSERT INTO farm_agrovets (farmer_id, agrovet_user_id) VALUES (%s, %s) ON CONFLICT DO NOTHING", (farmer_id, agrovet_user_id))
+
+
+def remove_farm_agrovet(farmer_id, agrovet_user_id):
+    _query("DELETE FROM farm_agrovets WHERE farmer_id = %s AND agrovet_user_id = %s", (farmer_id, agrovet_user_id))
+
+
+def farm_agrovets(farmer_id):
+    """Agrovets this farm added (active, approved agrovet logins only), by name."""
+    return _query(
+        """
+        SELECT u.id, u.name, u.phone FROM farm_agrovets fa JOIN users u ON u.id = fa.agrovet_user_id
+        WHERE fa.farmer_id = %s AND u.role = 'agrovet' AND u.active AND NOT u.pending ORDER BY u.name, u.id
+        """,
+        (farmer_id,),
+    )
+
+
+def is_farm_agrovet(farmer_id, agrovet_user_id):
+    return any(a["id"] == agrovet_user_id for a in farm_agrovets(farmer_id))
+
+
+ORDER_SELECT = """
+    SELECT o.*, f.name AS farmer_name, f.farm_name, f.phone AS farmer_phone, r.code AS route_code
+    FROM orders o JOIN farmers f ON f.id = o.farmer_id LEFT JOIN routes r ON r.id = f.route_id
+"""
+
+
+def add_order(order, lines):
+    """An order and its lines in one transaction. Returns the order id."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "INSERT INTO orders (farmer_id, agrovet_user_id, agrovet_name, fulfilment, wanted_on, notes) "
+            "VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
+            (order["farmer_id"], order["agrovet_user_id"], order["agrovet_name"], order["fulfilment"], order["wanted_on"],
+             order.get("notes")),
+        )
+        oid = cur.fetchone()[0]
+        for ln in lines:
+            cur.execute(
+                "INSERT INTO order_lines (order_id, farmer_id, product_id, product_name, unit, qty, catalogue_id) "
+                "VALUES (%s, %s, %s, %s, %s, %s, %s)",
+                (oid, order["farmer_id"], ln["product_id"], ln["product_name"], ln["unit"], ln["qty"], ln.get("catalogue_id")),
+            )
+    clear_cache()
+    return oid
+
+
+def get_order(order_id):
+    return _query(ORDER_SELECT + " WHERE o.id = %s", (order_id,), one=True)
+
+
+def order_lines(order_id):
+    return _query("SELECT * FROM order_lines WHERE order_id = %s ORDER BY id", (order_id,))
+
+
+def orders_for_farm(farmer_id, limit=50):
+    return _query(ORDER_SELECT + " WHERE o.farmer_id = %s ORDER BY o.created_at DESC, o.id DESC LIMIT %s", (farmer_id, limit))
+
+
+def orders_for_agrovet(agrovet_user_id, statuses, limit=200):
+    """Orders placed with this agrovet, soonest first. Never another agrovet's."""
+    return _query(
+        ORDER_SELECT + " WHERE o.agrovet_user_id = %s AND o.status = ANY(%s) "
+        "ORDER BY COALESCE(o.ready_on, o.wanted_on), o.id LIMIT %s",
+        (agrovet_user_id, list(statuses), limit),
+    )
+
+
+def open_order_count(farmer_id, agrovet_user_id):
+    return _query(
+        "SELECT COUNT(*) AS n FROM orders WHERE farmer_id = %s AND agrovet_user_id = %s AND status IN ('requested', 'confirmed')",
+        (farmer_id, agrovet_user_id), one=True,
+    )["n"]
+
+
+def lock_order_status(order_id):
+    """Inside a transaction (db.batch): lock the order row and return its status."""
+    row = _query("SELECT status FROM orders WHERE id = %s FOR UPDATE", (order_id,), one=True)
+    return row["status"] if row else None
+
+
+def update_order(order_id, **fields):
+    allowed = {"status", "ready_on", "agrovet_note", "collected_on"}
+    bad = set(fields) - allowed
+    if bad:
+        raise ValueError(f"cannot update {sorted(bad)}")
+    sets = ", ".join(f"{k} = %s" for k in fields)
+    _query(f"UPDATE orders SET {sets} WHERE id = %s", (*fields.values(), order_id))
+
+
+def price_order_line(line_id, unit_price_kes):
+    _query("UPDATE order_lines SET unit_price_kes = %s WHERE id = %s", (unit_price_kes, line_id))
+
+
+def bill_order_line(line_id, charge_id):
+    _query("UPDATE order_lines SET charge_id = %s WHERE id = %s", (charge_id, line_id))
+
+
+def agrovet_customers(agrovet_user_id):
+    """Farms that have ordered from this agrovet: collected orders, total billed, last collection."""
+    return _query(
+        """
+        SELECT f.id AS farmer_id, COALESCE(f.farm_name, f.name) AS farm, f.phone,
+               COUNT(DISTINCT o.id) FILTER (WHERE o.status = 'collected') AS orders,
+               COALESCE(SUM(l.qty * l.unit_price_kes) FILTER (WHERE o.status = 'collected'), 0) AS billed_kes,
+               MAX(o.collected_on) AS last_collected
+        FROM orders o JOIN farmers f ON f.id = o.farmer_id LEFT JOIN order_lines l ON l.order_id = o.id
+        WHERE o.agrovet_user_id = %s
+        GROUP BY f.id, f.farm_name, f.name, f.phone
+        ORDER BY orders DESC, billed_kes DESC
+        """,
+        (agrovet_user_id,),
+    )
 
 
 # --- alerts and the SMS outbox -------------------------------------------------------------------

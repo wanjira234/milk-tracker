@@ -20,7 +20,8 @@ def clean():
 
 def test_the_four_demo_logins_work_and_see_the_right_things():
     made = demo_seed.create_demo("demo-pass-123")
-    assert set(made) == {demo_seed.ADMIN_EMAIL, demo_seed.VET_EMAIL, demo_seed.FARMER_EMAIL, demo_seed.FRESH_EMAIL}
+    assert set(made) == {demo_seed.ADMIN_EMAIL, demo_seed.VET_EMAIL, demo_seed.FARMER_EMAIL, demo_seed.FRESH_EMAIL,
+                         demo_seed.AGROVET_EMAIL}
     users = {e: accounts.login_password(e, "demo-pass-123") for e in made}
     assert all(users.values()) and not any(u["must_change_password"] for u in users.values())
     farm = db.farmer_by_phone(demo_seed.DEMO_FARM_PHONE)
@@ -35,7 +36,7 @@ def test_the_four_demo_logins_work_and_see_the_right_things():
 def test_running_it_twice_changes_nothing_and_the_farm_has_enough_data_for_the_model():
     demo_seed.create_demo("demo-pass-123")
     assert demo_seed.create_demo("other-pass-456") == {}
-    assert len(db.list_farmers()) == 2 and len(db.list_users()) == 4
+    assert len(db.list_farmers()) == 2 and len(db.list_users()) == 5
     farm = db.farmer_by_phone(demo_seed.DEMO_FARM_PHONE)
     result = loader.assess_farmer(farm["id"], date.today())
     assert result["usable_days"] >= 14
@@ -45,7 +46,7 @@ def test_the_seed_command_asks_first_and_writes_nothing_unless_told_to(capsys):
     assert demo_seed.main(ask=lambda prompt: "no") == 1
     assert db.list_users() == [] and "Cancelled" in capsys.readouterr().out
     assert demo_seed.main(ask=lambda prompt: " Demo ") == 0
-    assert len(db.list_users()) == 4
+    assert len(db.list_users()) == 5
     out = capsys.readouterr().out
     assert "localhost" in out and "milk" not in out.split("database at:")[1].split("\n")[0]  # host shown, no password
 
@@ -86,3 +87,11 @@ def test_the_reset_command_puts_the_fresh_farm_back_and_leaves_the_other_farm_al
 def test_reset_asks_first_and_says_so_when_there_is_no_fresh_farm_yet(capsys):
     assert demo_seed.main(ask=lambda p: "no", argv=["--reset-fresh"]) == 1 and "Cancelled" in capsys.readouterr().out
     assert demo_seed.main(ask=lambda p: "demo", argv=["--reset-fresh"]) == 0 and "does not exist yet" in capsys.readouterr().out
+
+
+def test_the_demo_agrovet_is_ready_for_a_pre_order():
+    demo_seed.create_demo("demo-pass-123")
+    shop = db.user_by_email(demo_seed.AGROVET_EMAIL)
+    farm = db.farmer_by_phone(demo_seed.DEMO_FARM_PHONE)
+    assert shop["role"] == "agrovet" and [p["name"] for p in db.list_products(shop["id"])] == ["Dairy meal", "Maize germ", "Mineral lick"]
+    assert [a["id"] for a in db.farm_agrovets(farm["id"])] == [shop["id"]]

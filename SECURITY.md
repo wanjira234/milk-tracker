@@ -5,7 +5,7 @@ What is protected, how, and what is not done yet. The application-level items un
 ## In place
 
 **Accounts and roles**
-- Three roles (farmer, vet, admin). A farmer sees only their own farm; a vet only the farms on the routes they are allocated; a head admin everything; a route admin only the routes the head admin gave them (set-up, sign-up approval and deletes are head-admin only). Every page calls `require_login(roles=...)` and the data itself is filtered in `src/accounts.py`, so hiding a menu link is never the only protection.
+- Four roles (farmer, vet, agrovet, admin). A farmer sees only their own farm; a vet only the farms on the routes they are allocated; a head admin everything; a route admin only the routes the head admin gave them (set-up, sign-up approval and deletes are head-admin only). Every page calls `require_login(roles=...)` and the data itself is filtered in `src/accounts.py`, so hiding a menu link is never the only protection.
 - Admin is never self-service. Farmers and vets can sign up but cannot log in until an admin approves them, and a farm record is created only at approval. Pending sign-ups are capped.
 - A page opened directly without logging in shows only the sign-in box and never reaches the database.
 
@@ -31,6 +31,7 @@ What is protected, how, and what is not done yet. The application-level items un
 - Money records are not deleted by the app. A wrong charge is voided and kept, with who voided it, when and why; a credit charge only while nothing has been paid on it. Deleting a whole farm (head admin only) does remove its money records with it.
 - A charge for a visit must belong to the same farm as the visit (composite foreign key), and a visit with money recorded against it cannot be deleted on its own.
 - Feed purchases and stock counts are recorded only by the farm itself, only for feeds in its own catalogue; composite foreign keys make the database refuse a purchase, count or charge that points at another farm's feed or charge. A purchase and its charge are written in one transaction.
+- An agrovet sees no farm pages, no SMS and no feed records: only the orders placed with it and the name and phone of the farms that placed them. It confirms, declines and hands over only its own orders, from its own product list; a farmer orders only from agrovets they added. Confirming copies the prices onto the order, and confirming and handing over lock the order row, so a double click cannot bill it twice (tested with two threads).
 - A milk buyer's admin does not see the ledger, or requests a farmer sent to a vet of their own choosing.
 - Text other people typed (supplier names, vets' notes, farm and vet names) is escaped before it is shown, so it cannot turn into a link or formatting.
 
