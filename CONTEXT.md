@@ -139,6 +139,16 @@ tests/test_suggestions.py   Tests for the suggestion logic
 - Files: `src/orders.py`, `pages/16_order.py` (farmer), `pages/17_orders.py` (agrovet); Money and Home handle the agrovet; the demo seed adds `agrovet@demo.milk` with three products, already added by the demo farm.
 - Not yet: loyalty rules and promotions (the customer list is the start), payment prompts (STK push), SMS to the agrovet on a new order.
 
+**Phase 4: smoother journeys (3 Nov 2026, branch `phase-4-journeys`, built on `phase-1-providers` which holds Phases 1-3).** Rebuilt after the owner walked the journeys and rated them 4/10.
+- Agrovets no longer see Alerts or Vaccination (menu and `require_login`).
+- Farm setup starts with a tick list of common Kenyan feeds (`src/presets.py`: dairy meal, maize germ, hay, napier, silage, machicha, pineapple waste, banana stems, maize stalks, lucerne); a feed is saved only once it has a price. The farm also records its town.
+- Farmers pick a shop from a list of every approved agrovet that has products, their own town first; no phone typing. A product line is matched to the farm's own feed by name (`orders.match_feed`) and the kg per unit is read from the unit ("70 kg bag"), so hand-over adds the right kg to Feed stock.
+- Payment is chosen when ordering: M-Pesa to the shop's till or paybill (only if the shop has one), cash at collection, or deduction from milk money (only when the shop is the farm's milk buyer's own store, i.e. same organisation). Both sides see the status: unpaid → reported (farmer enters the M-Pesa code) → received (agrovet confirms). Goods paid by M-Pesa cannot be handed over before the agrovet confirms; cash needs a "received" tick. The app never holds money.
+- Agrovet Orders page: New orders, To hand over, Products & offers (percentage offers, max 50% and 60 days, applied at confirmation), Sales (best sellers, not selling, best customers, repeat customers), My shop (town, till or paybill).
+- Organisations (`orgs`, `routes.org_id`, `users.org_id`, `src/orgs.py`): the platform owner (OWNER_USER or an admin with no organisation) creates organisations and moves routes and logins between them; an organisation's admin sees and acts only on its own routes, farms, vets, logins and sign-ups. A farmer's typed "Who buys your milk?" at sign-up sends the sign-up to that organisation. Route admins stay within their organisation.
+- Demo seed adds organisation "Fresha (demo)", `store@demo.milk` (Fresha's store, takes milk deduction) and `owner@demo.milk` (platform owner); the demo agrovet has till 123456.
+- Not yet: STK push, SMS to the agrovet on a new order, credit on orders.
+
 - Scaffold exists. Foundation layer done and tested: `.gitignore`, `requirements.txt`, `.env.example`, Streamlit theme, `sql/schema.sql` (idempotent), `src/db.py`, `tests/test_db.py` (7 passing).
 - Schema is herd-level: one `farmers` row is one farm; yield is per milking session (morning/afternoon/evening), unique per farmer/date/session.
 - Still to build: ingestion, model, suggestions, SMS and LLM wiring, dashboard pages, Modal jobs, farmer signup, deck.

@@ -37,7 +37,7 @@ def show_lines(lines, priced):
 
 def farm_title(o):
     return (f"**{md(o['farm_name'] or o['farmer_name'])}**" + (f" · route {md(o['route_code'])}" if o["route_code"] else "")
-            + f" · {orders.FULFILMENT[o['fulfilment']].lower()} · {orders.PAYMENT[o['payment_method']].lower()}")
+            + f" · {orders.FULFILMENT_SHOP[o['fulfilment']]} · {orders.PAYMENT_SHOP[o['payment_method']]}")
 
 
 st.title("Orders")
@@ -105,15 +105,16 @@ with t_ready:
                         st.caption("Not paid yet. If the farmer paid without entering the code, enter it from your messages.")
                     with st.form(f"recv_{o['id']}"):
                         code = "" if o["payment_status"] == "reported" else st.text_input("M-Pesa code", key=f"rcode_{o['id']}")
-                        if st.form_submit_button("Payment received"):
+                        if st.form_submit_button("Payment received", type="primary"):
                             if attempt(lambda o=o, c=code: orders.confirm_payment(user, o["id"], c), "Payment confirmed."):
                                 st.rerun()
+                    st.caption("Hand the goods over once the payment is confirmed.")
+                    return
             with st.form(f"hand_{o['id']}"):
                 cash = st.checkbox(f"I received {kes(total)} in cash", key=f"cash_{o['id']}") if o["payment_method"] == "cash" else False
                 if o["payment_method"] == "milk_deduction":
                     st.caption("Comes off the farm's milk payment.")
-                ready_to_go = o["payment_method"] != "mpesa" or o["payment_status"] == "received"
-                if st.form_submit_button("Handed over", type="primary", disabled=not ready_to_go):
+                if st.form_submit_button("Handed over", type="primary"):
                     if attempt(lambda o=o, c=cash: orders.hand_over(user, o["id"], cash_received=c), "Done. It's on Money and in Sales."):
                         st.rerun()
 

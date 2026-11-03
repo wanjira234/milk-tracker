@@ -22,7 +22,10 @@ from src import db, ledger, stock
 STATUS_WORDS = {"requested": "waiting for the agrovet to confirm", "confirmed": "confirmed", "collected": "collected",
                 "cancelled": "cancelled", "declined": "declined by the agrovet"}
 FULFILMENT = {"pickup": "I'll pick it up", "delivery": "Deliver to the farm"}
-PAYMENT = {"mpesa": "M-Pesa to the shop", "cash": "Cash when I collect", "milk_deduction": "Deduct from my milk payment"}
+PAYMENT = {"mpesa": "M-Pesa to the shop", "cash": "Cash when I get it", "milk_deduction": "Deduct from my milk payment"}
+# the same, as the agrovet reads them on an order card
+FULFILMENT_SHOP = {"pickup": "Pickup", "delivery": "Delivery"}
+PAYMENT_SHOP = {"mpesa": "M-Pesa", "cash": "Cash", "milk_deduction": "Milk payment"}
 PAY_KINDS = {"till": "Till (Buy Goods)", "paybill": "Paybill"}
 MAX_LINES = 10
 MAX_OPEN_PER_AGROVET = 10
@@ -400,7 +403,8 @@ def sales(user, today=None, days=30):
     _is_agrovet(user)
     rows = db.agrovet_sales(user["id"], today - timedelta(days=days), today)
     sold = {r["product_name"] for r in rows}
-    slow = [p for p in db.list_products(user["id"]) if p["name"] not in sold]
-    customers = db.agrovet_customers(user["id"])
+    # "not selling" only means something once something has sold; before that it would be every product
+    slow = [p for p in db.list_products(user["id"]) if p["name"] not in sold] if rows else []
+    customers = [c for c in db.agrovet_customers(user["id"]) if (c["orders"] or 0) > 0]
     return {"products": rows, "slow": slow, "customers": customers,
             "repeat": sum(1 for c in customers if (c["orders"] or 0) >= 2), "kes": sum(float(r["kes"]) for r in rows)}

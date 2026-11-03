@@ -87,6 +87,7 @@ The app existed before the hackathon and the git history shows what is new. In N
 - **Before the 23 Oct 12:40 start:** milk and feed logging, the per-farm model and SMS advice, hosting, the feed calculator and profit view, per-cow records, calves and heifers, accounts with farmer/vet/admin roles, routes, sign-up with admin approval and demo accounts.
 - **From Fri 23 Oct 15:02:** vet service requests with a priced semen list, the vet's day sheet, the admin's attendance view, AI semen cost in the farm's profit and role-based menus (part of this code was drafted on Thursday night and committed on Friday).
 - **Sat 24 Oct onwards:** outbreak alerts and notices with confirmed, send-once SMS; the SMS outbox; vaccination days with booking; a cleaner sign-in screen and a menu for each role; a faster, all-or-nothing demo seed.
+- **On branches, not yet on the judged demo (from 3 Nov):** vet choice and the money ledger, purchases and feed stock, agrovet pre-orders, then organisations, shop list, visible M-Pesa/cash/milk-deduction payments, feed presets, and agrovet sales insights and offers.
 
 ## AI use
 

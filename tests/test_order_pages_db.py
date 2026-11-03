@@ -115,7 +115,7 @@ def test_a_shop_without_a_till_takes_cash_only(world):
     orders.set_shop(world["shop"], "Limuru", "till", "")
     orders.record_product(world["shop"], "Dairy meal", "70 kg bag", "2600")
     at = open_page("pages/16_order.py", world["farmer"])
-    assert widget(at, "radio", "order_pay").options == ["Cash when I collect"]
+    assert widget(at, "radio", "order_pay").options == ["Cash when I get it"]
 
 
 def test_agrovets_cannot_open_farm_or_alert_pages(world):

@@ -184,7 +184,8 @@ with t_orgs:
             if routes:
                 with st.form("route_org"):
                     c1, c2 = st.columns(2)
-                    r_id = c1.selectbox("Route", [r["id"] for r in routes], format_func={r["id"]: r["code"] for r in routes}.get, key="ro_route")
+                    r_id = c1.selectbox("Route", [r["id"] for r in routes], key="ro_route",
+                                        format_func={r["id"]: f"{r['code']} (now: {r['org_name'] or 'none'})" for r in routes}.get)
                     o_id = c2.selectbox("Belongs to", list(org_names), format_func=org_names.get, key="ro_org")
                     if st.form_submit_button("Save"):
                         if attempt(lambda: orgs.move_route(admin_login, r_id, o_id), "Saved."):
@@ -194,8 +195,9 @@ with t_orgs:
                 st.caption("Make an admin login an organisation's admin, or an agrovet its own store.")
                 with st.form("login_org"):
                     c1, c2 = st.columns(2)
-                    s_id = c1.selectbox("Login", [u["id"] for u in staff], format_func={u["id"]: f"{u['name']} ({u['role']})" for u in staff}.get,
-                                        key="lo_user")
+                    s_id = c1.selectbox("Login", [u["id"] for u in staff], key="lo_user",
+                                        format_func={u["id"]: f"{u['name']} ({u['role']}, now: {org_names.get(u.get('org_id'), 'none')})"
+                                                     for u in staff}.get)
                     o_id = c2.selectbox("Organisation", list(org_names), format_func=org_names.get, key="lo_org")
                     if st.form_submit_button("Save"):
                         if attempt(lambda: orgs.set_login_org(admin_login, s_id, o_id), "Saved."):
