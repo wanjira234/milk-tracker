@@ -3,7 +3,7 @@
 Each item is (text, page). Nothing is stored: the bell is a live "to look at" list, so it can never say
 something is new after it has been dealt with. Farmers hear about alerts, vaccination days and their visits;
 vets about requests waiting for a day and today's visits; head admins about signups, Contact us messages and
-requests nobody has handled by the day the farmer asked for.
+requests nobody has handled by the day the farmer asked for; agrovets about new orders and payments to check.
 """
 from datetime import date, timedelta
 
@@ -74,12 +74,28 @@ def _admin(user, today):
     return items
 
 
+def _agrovet(user, today):
+    """New orders and payments to check: the shop's alert until WhatsApp is switched on."""
+    waiting = db.orders_for_agrovet(user["id"], ("requested",))
+    confirmed = db.orders_for_agrovet(user["id"], ("confirmed",))
+    items = []
+    if waiting:
+        items.append((f"{_plural(len(waiting), 'new order', 'new orders')} from farmers to confirm.", "pages/17_orders.py"))
+    paid = [o for o in confirmed if o["payment_status"] == "reported"]
+    if paid:
+        items.append((f"{_plural(len(paid), 'M-Pesa payment', 'M-Pesa payments')} to check.", "pages/17_orders.py"))
+    ready = [o for o in confirmed if o["ready_on"] == today]
+    if ready:
+        items.append((f"{_plural(len(ready), 'order', 'orders')} to hand over today.", "pages/17_orders.py"))
+    return items
+
+
 def for_user(user, today=None):
     """[(text, page)] for the bell, most important first, at most MAX_ITEMS. Never raises: a bell must not break a page."""
     today = today or date.today()
     try:
         role = user.get("role")
-        items = _farmer(user, today) if role == "farmer" else _vet(user, today) if role == "vet" else _admin(user, today) if role == "admin" else []
+        items = {"farmer": _farmer, "vet": _vet, "admin": _admin, "agrovet": _agrovet}.get(role, lambda u, t: [])(user, today)
     except Exception:
         return []
     return items[:MAX_ITEMS]

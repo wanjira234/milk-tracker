@@ -617,3 +617,45 @@ CREATE TABLE IF NOT EXISTS orgs (
 );
 ALTER TABLE routes ADD COLUMN IF NOT EXISTS org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL;
 ALTER TABLE users  ADD COLUMN IF NOT EXISTS org_id INTEGER REFERENCES orgs(id) ON DELETE SET NULL;
+
+-- ---------------------------------------------------------------------------
+-- Phase 5: Maziwa as a bridge to the shops' own systems.
+--   A shop keeps its own POS and stock; Maziwa shows its catalogue to farmers (read-only), carries the
+--   farmer's order (what, pickup or delivery, the day and time, how they pay) to the shop, and brings back
+--   the confirmation. Products come from the shop's system through a bridge, from an uploaded price list,
+--   or typed in. Opening hours and time slots let the farmer choose a time the shop can actually serve.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS shop_hours (
+    agrovet_user_id INTEGER  NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    weekday         SMALLINT NOT NULL CHECK (weekday BETWEEN 0 AND 6),   -- 0 = Monday
+    opens           TIME     NOT NULL,
+    closes          TIME     NOT NULL,
+    delivers        BOOLEAN  NOT NULL DEFAULT FALSE,                      -- delivery rounds go out this day
+    PRIMARY KEY (agrovet_user_id, weekday),
+    CHECK (closes > opens)
+);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS slot_minutes INTEGER CHECK (slot_minutes IS NULL OR slot_minutes IN (30, 60, 120));
+ALTER TABLE users ADD COLUMN IF NOT EXISTS bridge_kind TEXT CHECK (bridge_kind IS NULL OR length(bridge_kind) <= 30);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS catalogue_synced_at TIMESTAMPTZ;
+
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS wanted_time TIME;   -- the slot the farmer chose (NULL = any time that day)
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS ready_time  TIME;   -- the slot the shop confirmed
+
+ALTER TABLE agrovet_products ADD COLUMN IF NOT EXISTS in_stock BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE agrovet_products ADD COLUMN IF NOT EXISTS source TEXT NOT NULL DEFAULT 'manual'
+    CHECK (source IN ('manual', 'upload', 'bridge'));
+ALTER TABLE agrovet_products ADD COLUMN IF NOT EXISTS external_ref TEXT CHECK (external_ref IS NULL OR length(external_ref) <= 60);
+
+-- What Maziwa handed to a shop's own system (or would send by WhatsApp), so both sides can see it went.
+CREATE TABLE IF NOT EXISTS bridge_outbox (
+    id              SERIAL PRIMARY KEY,
+    agrovet_user_id INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    order_id        INTEGER     REFERENCES orders(id) ON DELETE SET NULL,
+    channel         TEXT        NOT NULL CHECK (channel IN ('pos', 'whatsapp')),
+    event           TEXT        NOT NULL CHECK (event IN ('placed', 'cancelled', 'paid')),
+    payload         JSONB       NOT NULL,
+    status          TEXT        NOT NULL DEFAULT 'sent' CHECK (status IN ('queued', 'sent', 'failed')),
+    external_ref    TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_bridge_outbox_shop ON bridge_outbox (agrovet_user_id, created_at);

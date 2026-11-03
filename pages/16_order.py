@@ -5,7 +5,7 @@ import streamlit as st
 
 from src.messages import ICON
 
-from src import db, orders
+from src import bridges, db, hours, orders
 from src.auth import require_login
 from src.ui import cap, md
 
@@ -59,14 +59,36 @@ with new_order:
         by_id = {s["id"]: s for s in shops}
         shop_id = st.selectbox("Agrovet", list(by_id), format_func=lambda i: shop_label(by_id[i]), key="order_shop")
         shop = by_id[shop_id]
+        shop_hours = db.shop_hours(shop_id)
+        minutes = hours.slot_minutes(shop)
+        source = bridges.title(shop.get("bridge_kind"))
+        st.caption(f"Open {hours.summary(shop_hours)}" + (f" · prices and stock from {md(source)}" if source else ""))
         products = db.list_products(shop_id)
         promos = db.promotions_for(shop_id, today)
         feeds = db.list_catalogue(farmer_id)
         low_names = {name.lower() for _, name, _ in low}
 
-        def rank(p):  # what's running low first, then the farm's own feeds, then the rest
+        def rank(p):  # in stock first, then what's running low, then the farm's own feeds, then the rest
             feed, _ = orders.match_feed(p, feeds)
-            return (not (feed and feed["name"].lower() in low_names), feed is None, p["name"])
+            return (not p["in_stock"], not (feed and feed["name"].lower() in low_names), feed is None, p["name"])
+
+        # when: outside the form, so the times follow the day and pickup/delivery as the farmer changes them
+        how = st.radio("Collection", list(orders.FULFILMENT), format_func=orders.FULFILMENT.get, horizontal=True, key="order_how")
+        choices = orders.available(shop, how, today)
+        when = when_time = None
+        if not choices:
+            st.warning("This shop has no delivery days set. Choose pickup, or ask the shop." if how == "delivery"
+                       else "This shop has no open days in the next two weeks.")
+        elif not shop_hours:
+            when = st.date_input("Wanted on", value=today + timedelta(days=1), min_value=today,
+                                 max_value=today + timedelta(days=hours.HORIZON_DAYS), key="order_day")
+            st.caption("This shop hasn't set its hours yet: it will tell you the time when it confirms.")
+        else:
+            by_day = dict(choices)
+            c1, c2 = st.columns(2)
+            when = c1.selectbox("Day", list(by_day), format_func=lambda d: "Today" if d == today else
+                                ("Tomorrow" if d == today + timedelta(days=1) else f"{d:%a %d %b}"), key="order_day")
+            when_time = c2.selectbox("Time", by_day[when], format_func=lambda t: hours.label(t, minutes), key="order_time")
 
         with st.form("order", clear_on_submit=True):
             st.markdown("**How many of each?**")
@@ -75,25 +97,24 @@ with new_order:
                 price, promo = orders.price_today(p, promos, today)
                 feed, _ = orders.match_feed(p, feeds)
                 c1, c2 = st.columns([3, 1])
-                c1.markdown(md(f"{p['name']} · {p['unit']} · ") + (f"~~{kes(p['price_kes'])}~~ **{kes(price)}** "
-                                                                    f"({promo['percent_off']}% off until {promo['ends_on']:%d %b})"
-                                                                    if promo else kes(price))
-                            + (f"  \n:green[Adds to your {md(feed['name'])} stock]" if feed else ""))
+                text = md(f"{p['name']} · {p['unit']} · ") + (f"~~{kes(p['price_kes'])}~~ **{kes(price)}** "
+                                                               f"({promo['percent_off']}% off until {promo['ends_on']:%d %b})"
+                                                               if promo else kes(price))
+                if not p["in_stock"]:
+                    c1.markdown(f":gray[{text} · out of stock]")
+                    continue
+                c1.markdown(text + (f"  \n:green[Adds to your {md(feed['name'])} stock]" if feed else ""))
                 qty = c2.number_input("How many", min_value=0, max_value=1000, step=1, value=0, key=f"qty_{p['id']}",
                                       label_visibility="collapsed")
                 picks.append((p["id"], qty))
-            c1, c2 = st.columns(2)
-            when = c1.date_input("Wanted by", value=today + timedelta(days=1), min_value=today,
-                                 max_value=today + timedelta(days=orders.HORIZON_DAYS), key="order_day")
-            how = c2.radio("Collection", list(orders.FULFILMENT), format_func=orders.FULFILMENT.get, key="order_how")
             options = orders.payment_options(farmer_id, shop)
             pay = st.radio("How you'll pay", options, format_func=orders.PAYMENT.get, horizontal=True, key="order_pay")
             if "mpesa" not in options:
                 st.caption("This shop hasn't added its M-Pesa number yet, so pay in cash when you collect.")
             note = st.text_input("Note for the agrovet (optional)", max_chars=orders.MAX_NOTE, key="order_note")
-            if st.form_submit_button("Send order", type="primary"):
-                if attempt(lambda: orders.place_order(user, farmer_id, shop_id, picks, when, how, pay, note),
-                           "Sent. The agrovet will confirm it and the total; see My orders."):
+            if st.form_submit_button("Send order", type="primary", disabled=when is None):
+                if attempt(lambda: orders.place_order(user, farmer_id, shop_id, picks, when, how, pay, note, wanted_time=when_time),
+                           "Sent to the shop. It will confirm the order and the total; see My orders."):
                     st.rerun()
 
 with my_orders:
@@ -111,9 +132,9 @@ with my_orders:
                 st.write(f"- {float(ln['qty']):g} × {md(ln['product_name'])} ({md(ln['unit'])}){price}")
             facts = [orders.FULFILMENT[o["fulfilment"]], orders.PAYMENT[o["payment_method"]]]
             if o["status"] == "requested":
-                facts.append(f"wanted by {o['wanted_on']:%a %d %b}")
+                facts.append(f"asked for {o['wanted_on']:%a %d %b}" + (f" {o['wanted_time']:%H:%M}" if o["wanted_time"] else ""))
             if o["status"] == "confirmed":
-                facts.append(f"ready {o['ready_on']:%a %d %b}")
+                facts.append(f"ready {o['ready_on']:%a %d %b}" + (f" {o['ready_time']:%H:%M}" if o["ready_time"] else ""))
             st.caption(" · ".join(facts))
             if o["agrovet_note"]:
                 st.caption(f"From the agrovet: {md(o['agrovet_note'])}")

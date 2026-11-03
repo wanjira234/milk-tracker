@@ -1248,16 +1248,69 @@ def month_litres(farmer_id, start, end):
 # --- agrovets and pre-orders --------------------------------------------------------------------
 
 
-def upsert_product(agrovet_user_id, name, unit, price_kes):
+def upsert_product(agrovet_user_id, name, unit, price_kes, in_stock=True, source="manual", external_ref=None):
     """Add a product to this agrovet's list, or reprice it (and bring it back). Returns its id."""
     return _query(
         """
-        INSERT INTO agrovet_products (agrovet_user_id, name, unit, price_kes) VALUES (%s, %s, %s, %s)
-        ON CONFLICT (agrovet_user_id, name) DO UPDATE SET unit = EXCLUDED.unit, price_kes = EXCLUDED.price_kes, active = TRUE
+        INSERT INTO agrovet_products (agrovet_user_id, name, unit, price_kes, in_stock, source, external_ref)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (agrovet_user_id, name) DO UPDATE SET unit = EXCLUDED.unit, price_kes = EXCLUDED.price_kes, active = TRUE,
+            in_stock = EXCLUDED.in_stock, source = EXCLUDED.source, external_ref = EXCLUDED.external_ref
         RETURNING id
         """,
-        (agrovet_user_id, name, unit, price_kes), one=True,
+        (agrovet_user_id, name, unit, price_kes, in_stock, source, external_ref), one=True,
     )["id"]
+
+
+def set_in_stock(agrovet_user_id, product_id, in_stock):
+    _query("UPDATE agrovet_products SET in_stock = %s WHERE id = %s AND agrovet_user_id = %s", (bool(in_stock), product_id, agrovet_user_id))
+
+
+def retire_products_except(agrovet_user_id, keep_ids):
+    """Take every product off this shop's list except keep_ids (an uploaded price list replaces the old one)."""
+    _query("UPDATE agrovet_products SET active = FALSE WHERE agrovet_user_id = %s AND active AND NOT (id = ANY(%s))",
+           (agrovet_user_id, list(keep_ids)))
+
+
+def shop_hours(agrovet_user_id):
+    """{weekday: {"opens", "closes", "delivers"}}; {} when the shop set no hours."""
+    rows = _query("SELECT weekday, opens, closes, delivers FROM shop_hours WHERE agrovet_user_id = %s ORDER BY weekday",
+                  (agrovet_user_id,))
+    return {r["weekday"]: {"opens": r["opens"], "closes": r["closes"], "delivers": r["delivers"]} for r in rows}
+
+
+def set_shop_hours(agrovet_user_id, hours, slot_minutes):
+    """Replace the shop's hours (and slot length) in one transaction."""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("DELETE FROM shop_hours WHERE agrovet_user_id = %s", (agrovet_user_id,))
+        for wd, h in sorted(hours.items()):
+            cur.execute("INSERT INTO shop_hours (agrovet_user_id, weekday, opens, closes, delivers) VALUES (%s, %s, %s, %s, %s)",
+                        (agrovet_user_id, wd, h["opens"], h["closes"], h["delivers"]))
+        cur.execute("UPDATE users SET slot_minutes = %s WHERE id = %s AND role = 'agrovet'", (slot_minutes, agrovet_user_id))
+    clear_cache()
+
+
+def set_bridge(agrovet_user_id, kind):
+    _query("UPDATE users SET bridge_kind = %s WHERE id = %s AND role = 'agrovet'", (kind, agrovet_user_id))
+
+
+def mark_catalogue_synced(agrovet_user_id):
+    _query("UPDATE users SET catalogue_synced_at = now() WHERE id = %s", (agrovet_user_id,))
+
+
+def add_outbox(agrovet_user_id, order_id, channel, event, payload, status="sent", external_ref=None):
+    import json
+
+    return _query(
+        "INSERT INTO bridge_outbox (agrovet_user_id, order_id, channel, event, payload, status, external_ref) "
+        "VALUES (%s, %s, %s, %s, %s::jsonb, %s, %s) RETURNING id",
+        (agrovet_user_id, order_id, channel, event, json.dumps(payload, default=str), status, external_ref), one=True,
+    )["id"]
+
+
+def outbox_for(agrovet_user_id, limit=20):
+    return _query("SELECT * FROM bridge_outbox WHERE agrovet_user_id = %s ORDER BY created_at DESC, id DESC LIMIT %s",
+                  (agrovet_user_id, limit))
 
 
 def list_products(agrovet_user_id, active_only=True):
@@ -1308,7 +1361,7 @@ def list_agrovets(town=None):
     Only shop details are returned (name, town, how to pay), never a login's private fields."""
     return _query(
         """
-        SELECT u.id, u.name, u.town, u.pay_kind, u.pay_number, u.pay_account,
+        SELECT u.id, u.name, u.town, u.pay_kind, u.pay_number, u.pay_account, u.slot_minutes, u.bridge_kind,
                (SELECT COUNT(*) FROM agrovet_products p WHERE p.agrovet_user_id = u.id AND p.active) AS products
         FROM users u
         WHERE u.role = 'agrovet' AND u.active AND NOT u.pending
@@ -1321,7 +1374,7 @@ def list_agrovets(town=None):
 
 def shop(agrovet_user_id):
     """One agrovet's public shop details, or None if it isn't an active agrovet."""
-    return _query("SELECT id, name, town, pay_kind, pay_number, pay_account FROM users "
+    return _query("SELECT id, name, town, pay_kind, pay_number, pay_account, slot_minutes, bridge_kind, catalogue_synced_at FROM users "
                   "WHERE id = %s AND role = 'agrovet' AND active AND NOT pending", (agrovet_user_id,), one=True)
 
 
@@ -1335,10 +1388,10 @@ def add_order(order, lines):
     """An order and its lines in one transaction. Returns the order id."""
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO orders (farmer_id, agrovet_user_id, agrovet_name, fulfilment, wanted_on, notes, payment_method) "
-            "VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            "INSERT INTO orders (farmer_id, agrovet_user_id, agrovet_name, fulfilment, wanted_on, wanted_time, notes, payment_method) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
             (order["farmer_id"], order["agrovet_user_id"], order["agrovet_name"], order["fulfilment"], order["wanted_on"],
-             order.get("notes"), order.get("payment_method", "cash")),
+             order.get("wanted_time"), order.get("notes"), order.get("payment_method", "cash")),
         )
         oid = cur.fetchone()[0]
         for ln in lines:
@@ -1368,7 +1421,7 @@ def orders_for_agrovet(agrovet_user_id, statuses, limit=200):
     """Orders placed with this agrovet, soonest first. Never another agrovet's."""
     return _query(
         ORDER_SELECT + " WHERE o.agrovet_user_id = %s AND o.status = ANY(%s) "
-        "ORDER BY COALESCE(o.ready_on, o.wanted_on), o.id LIMIT %s",
+        "ORDER BY COALESCE(o.ready_on, o.wanted_on), COALESCE(o.ready_time, o.wanted_time), o.id LIMIT %s",
         (agrovet_user_id, list(statuses), limit),
     )
 
@@ -1387,7 +1440,7 @@ def lock_order_status(order_id):
 
 
 def update_order(order_id, **fields):
-    allowed = {"status", "ready_on", "agrovet_note", "collected_on", "payment_status", "mpesa_code", "payment_reported_at",
+    allowed = {"status", "ready_on", "ready_time", "agrovet_note", "collected_on", "payment_status", "mpesa_code", "payment_reported_at",
                "payment_received_at"}
     bad = set(fields) - allowed
     if bad:

@@ -138,6 +138,22 @@ def create_demo(password=None, today=None):
         db.set_shop_profile(store_id, DEMO_TOWN, "paybill", "400200", None)
         for name, unit, price in STORE_PRODUCTS:
             db.upsert_product(store_id, name, unit, price)
+    # the shops' hours, and Fresha's store connected to its own (demo) system, which fills its catalogue
+    from datetime import time
+
+    from src import bridges, catalogue
+
+    shop = db.user_by_email(AGROVET_EMAIL)
+    if shop is not None and not db.shop_hours(shop["id"]):
+        db.set_shop_hours(shop["id"], {wd: {"opens": time(8), "closes": time(18), "delivers": wd in (1, 4)} for wd in range(6)}, 60)
+    store = db.user_by_email(STORE_EMAIL)
+    if store is not None:
+        if not db.shop_hours(store["id"]):
+            db.set_shop_hours(store["id"], {wd: {"opens": time(7), "closes": time(17), "delivers": wd in (2, 5)} for wd in range(6)}, 30)
+        if not (db.shop(store["id"]) or {}).get("bridge_kind"):
+            db.set_bridge(store["id"], "demo_fresha")
+            products, _ = catalogue.parse_rows(bridges.get("demo_fresha").fetch_catalogue())
+            catalogue.import_products(store["id"], products, "bridge")
     if not db.user_by_email(OWNER_EMAIL):
         accounts.create_account("admin", "Demo platform owner", email=OWNER_EMAIL, temp_password=password)
         made[OWNER_EMAIL] = password

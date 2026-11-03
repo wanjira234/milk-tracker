@@ -346,7 +346,7 @@ MENU = {
     "vet": [("app.py", "Home"), ("pages/8_my_day.py", "My day"), ("pages/14_money.py", "Money")] + _COMMON + _ACCOUNT,
     # An agrovet works from its orders; it sees farms only through the orders they place with it.
     # No Alerts or Vaccination: those are for the farms, their vets and their milk buyer.
-    "agrovet": [("app.py", "Home"), ("pages/17_orders.py", "Orders"), ("pages/14_money.py", "Money")] + _ACCOUNT,
+    "agrovet": [("app.py", "Home"), ("pages/17_orders.py", "Orders")] + _ACCOUNT,  # money is kept in the shop's own POS
     # The admin runs the business and sees no farm-data pages: to see a farmer's view, log in as that farmer.
     "admin": [("app.py", "Home"), ("pages/7_admin.py", "Admin"), ("pages/10_attendance.py", "Attendance")] + _COMMON
              + _ACCOUNT,

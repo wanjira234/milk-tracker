@@ -17,7 +17,7 @@ import re
 from datetime import date, datetime, timedelta, timezone
 from decimal import ROUND_HALF_UP, Decimal
 
-from src import db, ledger, stock
+from src import bridges, db, hours, ledger, stock
 
 STATUS_WORDS = {"requested": "waiting for the agrovet to confirm", "confirmed": "confirmed", "collected": "collected",
                 "cancelled": "cancelled", "declined": "declined by the agrovet"}
@@ -114,6 +114,31 @@ def record_product(user, name, unit, price):
     return db.upsert_product(user["id"], name, unit, ledger.parse_amount(price, "the price"))
 
 
+def set_in_stock(user, product_id, in_stock):
+    _is_agrovet(user)
+    db.set_in_stock(user["id"], product_id, in_stock)
+
+
+def set_hours(user, rows, slot_minutes):
+    """The shop's opening days and times, which days it delivers, and how long each pickup slot is."""
+    _is_agrovet(user)
+    if slot_minutes not in hours.SLOT_CHOICES:
+        raise ValueError("choose a slot length")
+    parsed = hours.parse(rows)
+    if not parsed:
+        raise ValueError("tick at least one day you're open")
+    db.set_shop_hours(user["id"], parsed, slot_minutes)
+
+
+def available(shop, fulfilment, today, now=None):
+    """[(day, [slot times])] a farmer can choose from this shop for pickup or delivery."""
+    h = db.shop_hours(shop["id"])
+    m = hours.slot_minutes(shop)
+    now = now or hours.now_local()
+    days = hours.days_open(h, today, fulfilment, hours.HORIZON_DAYS, now, m)
+    return [(d, hours.slots_on(h, d, fulfilment, now, m) if h else []) for d in days]
+
+
 # --- matching a product to the farm's own feed ---------------------------------------------------
 
 
@@ -166,8 +191,10 @@ def payment_options(farmer_id, shop):
     return out
 
 
-def place_order(user, farmer_id, agrovet_id, lines, wanted_on, fulfilment, payment_method="cash", notes=None, today=None):
-    """lines = [(product id, quantity)]. Blank or 0 quantities are skipped. Returns the order id."""
+def place_order(user, farmer_id, agrovet_id, lines, wanted_on, fulfilment, payment_method="cash", notes=None, today=None,
+                wanted_time=None, now=None):
+    """lines = [(product id, quantity)]. Blank or 0 quantities are skipped. wanted_time is one of the shop's slots
+    (None when the shop set no hours). Returns the order id; the shop is told through its bridge or alert."""
     today = today or date.today()
     _own_farm(user, farmer_id)
     shop = db.shop(agrovet_id)
@@ -179,6 +206,9 @@ def place_order(user, farmer_id, agrovet_id, lines, wanted_on, fulfilment, payme
         raise ValueError("choose how you'll pay" if payment_method not in PAYMENT else
                          "this shop doesn't take that: choose another way to pay")
     _check_day(wanted_on, today, "the day")
+    if now is None:  # the shop's clock; a test or a back-dated call with its own `today` starts that day at midnight
+        now = hours.now_local() if today == date.today() else datetime.combine(today, datetime.min.time())
+    hours.check(db.shop_hours(agrovet_id), wanted_on, wanted_time, fulfilment, now, hours.slot_minutes(shop))
     products = {p["id"]: p for p in db.list_products(agrovet_id)}
     feeds = db.list_catalogue(farmer_id)
     clean = []
@@ -188,6 +218,8 @@ def place_order(user, farmer_id, agrovet_id, lines, wanted_on, fulfilment, payme
         product = products.get(product_id)
         if product is None:
             raise ValueError("choose products from this agrovet's list")
+        if not product["in_stock"]:
+            raise ValueError(f"{product['name']} is out of stock at this shop")
         units = stock._units(qty, "the quantity")
         if units == 0:
             continue
@@ -203,8 +235,11 @@ def place_order(user, farmer_id, agrovet_id, lines, wanted_on, fulfilment, payme
     if db.open_order_count(farmer_id, agrovet_id) >= MAX_OPEN_PER_AGROVET:
         raise ValueError(f"you already have {MAX_OPEN_PER_AGROVET} open orders with this agrovet")
     order = {"farmer_id": farmer_id, "agrovet_user_id": agrovet_id, "agrovet_name": shop["name"][:80], "fulfilment": fulfilment,
-             "wanted_on": wanted_on, "notes": _clean(notes, MAX_NOTE, "the note") or None, "payment_method": payment_method}
-    return db.add_order(order, clean)
+             "wanted_on": wanted_on, "wanted_time": wanted_time, "notes": _clean(notes, MAX_NOTE, "the note") or None,
+             "payment_method": payment_method}
+    order_id = db.add_order(order, clean)
+    bridges.announce(order_id, "placed")
+    return order_id
 
 
 def cancel_order(user, order_id):
@@ -217,6 +252,7 @@ def cancel_order(user, order_id):
     if o["payment_status"] != "unpaid":
         raise ValueError("you've paid for this order: ask the agrovet to cancel it and refund you")
     db.update_order(order_id, status="cancelled")
+    bridges.announce(order_id, "cancelled")
 
 
 def report_payment(user, order_id, code):
@@ -231,6 +267,7 @@ def report_payment(user, order_id, code):
     if o["payment_status"] == "received":
         raise ValueError("the agrovet has already confirmed your payment")
     db.update_order(order_id, payment_status="reported", mpesa_code=mpesa_code(code), payment_reported_at=_now())
+    bridges.announce(order_id, "paid")
 
 
 def suggested_feeds(farmer_id, today=None):
@@ -258,8 +295,9 @@ def price_today(product, promos, today):
     return price, promo
 
 
-def confirm_order(user, order_id, ready_on, note=None, today=None):
-    """The agrovet accepts an order for a day; today's prices (with promotions) are copied onto its lines."""
+def confirm_order(user, order_id, ready_on, note=None, today=None, ready_time="same"):
+    """The agrovet accepts an order for a day (and time: by default the one the farmer chose, if the day is
+    unchanged); today's prices (with promotions) are copied onto its lines."""
     today = today or date.today()
     o = _own_order(user, order_id)
     if o["status"] != "requested":
@@ -276,7 +314,10 @@ def confirm_order(user, order_id, ready_on, note=None, today=None):
             raise ValueError("only a waiting order can be confirmed")
         for ln in lines:
             db.price_order_line(ln["id"], price_today(products[ln["product_id"]], promos, today)[0])
-        db.update_order(order_id, status="confirmed", ready_on=ready_on, agrovet_note=_clean(note, MAX_NOTE, "the note") or None)
+        if ready_time == "same":
+            ready_time = o["wanted_time"] if ready_on == o["wanted_on"] else None
+        db.update_order(order_id, status="confirmed", ready_on=ready_on, ready_time=ready_time,
+                        agrovet_note=_clean(note, MAX_NOTE, "the note") or None)
 
 
 def decline_order(user, order_id, reason):
@@ -353,7 +394,8 @@ def hand_over(user, order_id, cash_received=False, today=None):
 def rounds(user, day):
     """Confirmed orders ready on a day, for the agrovet: deliveries by route (one trip per area), then pickups."""
     _is_agrovet(user)
-    ready = [o for o in db.orders_for_agrovet(user["id"], ("confirmed",)) if o["ready_on"] == day]
+    ready = sorted((o for o in db.orders_for_agrovet(user["id"], ("confirmed",)) if o["ready_on"] == day),
+                   key=lambda o: (o["ready_time"] is None, o["ready_time"] or datetime.min.time(), o["id"]))
     deliveries, pickups = {}, []
     for o in ready:
         if o["fulfilment"] == "delivery":

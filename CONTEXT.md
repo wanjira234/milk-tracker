@@ -149,6 +149,13 @@ tests/test_suggestions.py   Tests for the suggestion logic
 - Demo seed adds organisation "Fresha (demo)", `store@demo.milk` (Fresha's store, takes milk deduction) and `owner@demo.milk` (platform owner); the demo agrovet has till 123456.
 - Not yet: STK push, SMS to the agrovet on a new order, credit on orders.
 
+**Phase 5: Maziwa as a bridge (3 Nov 2026, same branch).** Direction from the owner: don't rebuild the shops' systems (Fresha and Mboga Center already have POS and digitised stock); connect them to the farmer.
+- Catalogue (read-only for farmers) comes from the shop's own system through a bridge (`src/bridges.py`; `DemoPOS` plays Fresha's system from `data/bridge/fresha_store.csv`), or from an uploaded CSV/Excel price list exported from the POS (`src/catalogue.py`, loose column names, in-stock from quantity), or typed in. Out-of-stock products show greyed and cannot be ordered. A connected shop's stock table is read-only: it changes in its own system, then Sync.
+- Shop hours (`shop_hours`, `src/hours.py`): open days and times, delivery days, slot length (30/60/120 min). The farmer picks pickup or delivery, then a day and a slot the shop can serve (same-day slots start an hour from now, Nairobi time). The shop confirms the time or changes it; hand-over rounds are sorted by time.
+- Telling the shop: each order event goes to the shop's system through its bridge (recorded in `bridge_outbox` with the POS reference) and a WhatsApp text is queued for when that channel is live; until then the shop's bell shows new orders, payments to check and today's hand-overs.
+- The agrovet's Money page is gone from its menu (money lives in its POS); the farmer's Money page still records what they bought.
+- Not yet: real bridges (need each shop's API access), WhatsApp Business sending.
+
 - Scaffold exists. Foundation layer done and tested: `.gitignore`, `requirements.txt`, `.env.example`, Streamlit theme, `sql/schema.sql` (idempotent), `src/db.py`, `tests/test_db.py` (7 passing).
 - Schema is herd-level: one `farmers` row is one farm; yield is per milking session (morning/afternoon/evening), unique per farmer/date/session.
 - Still to build: ingestion, model, suggestions, SMS and LLM wiring, dashboard pages, Modal jobs, farmer signup, deck.
