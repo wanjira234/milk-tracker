@@ -180,7 +180,7 @@ if catalogue:
     c1, c2 = st.columns([3, 1], vertical_alignment="bottom")
     to_remove = c1.selectbox("Stop using a feed", list(names), format_func=names.get, index=None, placeholder="Choose a feed")
     if c2.button("Remove", disabled=to_remove is None):
-        db.retire_catalogue_item(to_remove)
+        db.retire_catalogue_item(to_remove, farmer_id)
         st.rerun()
     st.caption("Removing hides a feed from the logging form. Past entries keep their numbers.")
 

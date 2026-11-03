@@ -102,7 +102,7 @@ def test_catalogue_upsert_updates_price_and_reactivates(farmer):
     first = db.upsert_catalogue_item(farmer, "banana trunks", "trunk", 25, 40)
     again = db.upsert_catalogue_item(farmer, "banana trunks", "trunk", 25, 45)
     assert again == first
-    db.retire_catalogue_item(first)
+    db.retire_catalogue_item(first, farmer)
     assert db.list_catalogue(farmer) == []
     assert len(db.list_catalogue(farmer, active_only=False)) == 1
     db.upsert_catalogue_item(farmer, "banana trunks", "trunk", 25, 50)  # re-adding brings it back

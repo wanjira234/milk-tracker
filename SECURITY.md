@@ -30,6 +30,7 @@ What is protected, how, and what is not done yet. The application-level items un
 - A payment can never exceed what is owed: it is written in one transaction that first locks the charge row, so two payments at once cannot both succeed (tested with two threads). Marking a visit done locks the request the same way, so a double click cannot bill it twice (tested).
 - Money records are not deleted by the app. A wrong charge is voided and kept, with who voided it, when and why; a credit charge only while nothing has been paid on it. Deleting a whole farm (head admin only) does remove its money records with it.
 - A charge for a visit must belong to the same farm as the visit (composite foreign key), and a visit with money recorded against it cannot be deleted on its own.
+- Feed purchases and stock counts are recorded only by the farm itself, only for feeds in its own catalogue; composite foreign keys make the database refuse a purchase, count or charge that points at another farm's feed or charge. A purchase and its charge are written in one transaction.
 - A milk buyer's admin does not see the ledger, or requests a farmer sent to a vet of their own choosing.
 - Text other people typed (supplier names, vets' notes, farm and vet names) is escaped before it is shown, so it cannot turn into a link or formatting.
 

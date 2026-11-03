@@ -113,9 +113,13 @@ st.caption("An estimate from your records. Your milk buyer's statement is the of
 c1, c2 = st.columns(2)
 c1.metric("All costs (incl. feed)", kes(s["total_costs"]))
 c2.metric("Left after costs", kes(s["after_costs"]))
-if s["by_category"]:
-    st.dataframe([{"What": k, "KES": round(v)} for k, v in s["by_category"].items()]
-                 + [{"What": "Feed (from the feed log)", "KES": round(s["feed_cost"])}], hide_index=True, use_container_width=True)
+rows = [{"What": k, "KES": round(v)} for k, v in s["by_category"].items()]
+if s["feed_from_log"] and s["feed_cost"]:
+    rows.append({"What": "Feed (from the feed log)", "KES": round(s["feed_cost"])})
+if rows:
+    st.dataframe(rows, hide_index=True, use_container_width=True)
+if s["feed_from_log"]:
+    st.caption("Feed is counted from the feed log. Record feed purchases on Feed stock to count what you actually paid.")
 
 st.header("What I owe")
 if not s["owing"]:

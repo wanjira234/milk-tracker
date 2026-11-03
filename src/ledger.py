@@ -99,6 +99,15 @@ def record_farm_cost(user, farmer_id, supplier, category, amount, charged_on, te
                      method=None, reference=None, description=None, today=None):
     """A farmer records a cost from any supplier (Mboga Center, the buyer's store, a vet with no login).
     Returns the charge id."""
+    charge, payment = farm_charge(user, farmer_id, supplier, category, amount, charged_on, terms, due_on,
+                                  method, reference, description, today)
+    return db.add_charges([charge], payment)[0]
+
+
+def farm_charge(user, farmer_id, supplier, category, amount, charged_on, terms, due_on=None,
+                method=None, reference=None, description=None, today=None):
+    """Check a farmer's cost and return (charge, payment) ready to write, without writing anything.
+    Used by record_farm_cost and by feed purchases, which save the charge with the purchase."""
     today = today or date.today()
     _own_farm(user, farmer_id)
     supplier = _clean(supplier, 80, "the supplier's name")
@@ -115,7 +124,7 @@ def record_farm_cost(user, farmer_id, supplier, category, amount, charged_on, te
               "created_by_user_id": user["id"]}
     payment = None if terms != "paid" else {"method": method, "paid_on": charged_on, "reference": reference,
                                             "recorded_by_user_id": user["id"]}
-    return db.add_charges([charge], payment)[0]
+    return charge, payment
 
 
 # --- the vet's bill for a visit -----------------------------------------------------------------
@@ -221,7 +230,10 @@ def statement(litres, milk_price, feed_cost, charges, open_credit, today):
     charge still owed, any month. All amounts in KES.
 
     expected payout = milk income - what the buyer will deduct. It is an estimate: the buyer's own
-    statement is the official record (and the app says so)."""
+    statement is the official record (and the app says so).
+
+    Feed is counted once: from the feed purchases recorded this month (charges of category 'feed') if
+    there are any, else from the cost on the feed log (`feed_cost`), and `feed_from_log` says which."""
     income = None if milk_price is None else litres * float(milk_price)
     by_terms = {t: 0.0 for t in TERMS}
     by_category = {}
@@ -241,7 +253,8 @@ def statement(litres, milk_price, feed_cost, charges, open_credit, today):
             o["overdue"] += rest
         elif o["next_due"] is None or c["due_on"] < o["next_due"]:
             o["next_due"] = c["due_on"]
-    total_costs = float(feed_cost or 0) + sum(by_terms.values())
+    feed_from_log = "feed" not in by_category
+    total_costs = (float(feed_cost or 0) if feed_from_log else 0.0) + sum(by_terms.values())
     return {
         "litres": litres,
         "income": income,
@@ -250,6 +263,7 @@ def statement(litres, milk_price, feed_cost, charges, open_credit, today):
         "paid_elsewhere": by_terms["paid"],
         "credit_this_month": by_terms["credit"],
         "feed_cost": float(feed_cost or 0),
+        "feed_from_log": feed_from_log,
         "by_category": {CATEGORIES[k]: v for k, v in sorted(by_category.items(), key=lambda kv: -kv[1])},
         "total_costs": total_costs,
         "after_costs": None if income is None else income - total_costs,

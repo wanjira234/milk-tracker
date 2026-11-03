@@ -5,10 +5,10 @@ import streamlit as st
 
 from src.messages import ICON
 
-from src import accounts, db, services
+from src import accounts, db, services, stock
 from src.onboarding import checklist, next_step
 from src.ingestion.manual_entry import normalize_phone
-from src.ui import cap, farmer_selector
+from src.ui import cap, farmer_selector, md
 from src.auth import require_login
 
 st.set_page_config(page_title="Maziwa Plus", page_icon=ICON, layout="centered")
@@ -94,6 +94,10 @@ if farmers:
                 mark = "✅" if ok else ("👉" if key == upcoming[0] else "⬜")
                 st.markdown(f"{mark} **{label}**" + ("" if ok else f" — {why}"))
             st.page_link(upcoming[3], label=f"Next: {upcoming[1]}", icon="➡️")
+
+    for r in stock.running_low(farmer_id, today):
+        when = "today" if r["days_left"] < 1 else f"in about {int(r['days_left'])} day{'s' if int(r['days_left']) != 1 else ''}"
+        st.warning(f"**{md(r['name'])}** runs out {when}. Open **Feed stock** to see what's left.")
 
     c1, c2 = st.columns(2)
     c1.metric("Milk today (litres)", f"{float(todays['litres']):.1f}" if todays else "no entry")

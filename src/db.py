@@ -794,9 +794,84 @@ def list_catalogue(farmer_id, active_only=True):
     return _query(sql + " ORDER BY name", (farmer_id,))
 
 
-def retire_catalogue_item(item_id):
-    """Hide a feed from the logging form. Past entries keep their numbers."""
-    _query("UPDATE feed_catalogue SET active = FALSE WHERE id = %s", (item_id,))
+def retire_catalogue_item(item_id, farmer_id):
+    """Hide a feed from the logging form. Past entries keep their numbers. Only this farm's own item."""
+    _query("UPDATE feed_catalogue SET active = FALSE WHERE id = %s AND farmer_id = %s", (item_id, farmer_id))
+
+
+def get_catalogue_item(farmer_id, item_id):
+    return _query("SELECT * FROM feed_catalogue WHERE id = %s AND farmer_id = %s", (item_id, farmer_id), one=True)
+
+
+def set_lead_days(farmer_id, item_id, days):
+    _query("UPDATE feed_catalogue SET lead_days = %s WHERE id = %s AND farmer_id = %s", (days, item_id, farmer_id))
+
+
+# --- feed bought and feed left -------------------------------------------------------------------
+
+
+def add_feed_purchase(purchase, charge=None, payment=None):
+    """A purchase, and its charge (and payment) in the money ledger if it has a price: one transaction.
+    Returns the purchase id."""
+    with get_conn() as conn, conn.cursor() as cur:
+        charge_id = None
+        if charge is not None:
+            charge_id = _insert_charge(cur, charge)
+            if payment is not None:
+                _insert_payment(cur, charge_id, {**payment, "amount_kes": charge["amount_kes"]})
+        cur.execute(
+            "INSERT INTO feed_purchases (farmer_id, catalogue_id, purchased_on, units, kg, cost_kes, charge_id, created_by_user_id) "
+            "VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id",
+            (purchase["farmer_id"], purchase["catalogue_id"], purchase["purchased_on"], purchase["units"], purchase["kg"],
+             purchase["cost_kes"], charge_id, purchase.get("created_by_user_id")),
+        )
+        pid = cur.fetchone()[0]
+    clear_cache()
+    return pid
+
+
+def feed_purchases(farmer_id, since=None):
+    sql, args = ("SELECT p.*, c.name AS feed, c.unit FROM feed_purchases p JOIN feed_catalogue c ON c.id = p.catalogue_id "
+                 "WHERE p.farmer_id = %s"), [farmer_id]
+    if since is not None:
+        sql, args = sql + " AND p.purchased_on >= %s", args + [since]
+    return _query(sql + " ORDER BY p.purchased_on DESC, p.id DESC", tuple(args))
+
+
+def set_stock_count(farmer_id, item_id, counted_on, kg):
+    """How much of a feed is left on a day (0 = finished). A second count the same day replaces the first."""
+    _query(
+        "INSERT INTO feed_stock_counts (farmer_id, catalogue_id, counted_on, kg) VALUES (%s, %s, %s, %s) "
+        "ON CONFLICT (catalogue_id, counted_on) DO UPDATE SET kg = EXCLUDED.kg, created_at = now()",
+        (farmer_id, item_id, counted_on, kg),
+    )
+
+
+def stock_counts(farmer_id):
+    return _query("SELECT catalogue_id, counted_on, kg FROM feed_stock_counts WHERE farmer_id = %s ORDER BY counted_on, id",
+                  (farmer_id,))
+
+
+def fed_by_item(farmer_id, start, end):
+    """kg fed per catalogue item per day from `start` to `end`. An entry logged in plain kg counts for the
+    catalogue item of the same name."""
+    return _query(
+        """
+        SELECT c.id AS catalogue_id, l.log_date, SUM(l.kg) AS kg
+        FROM feed_logs l JOIN feed_catalogue c
+          ON c.farmer_id = l.farmer_id AND (l.catalogue_id = c.id OR (l.catalogue_id IS NULL AND l.feed_type = c.name))
+        WHERE l.farmer_id = %s AND l.log_date BETWEEN %s AND %s
+        GROUP BY c.id, l.log_date ORDER BY l.log_date
+        """,
+        (farmer_id, start, end),
+    )
+
+
+def feed_logged_days(farmer_id, start, end):
+    """Days from `start` to `end` with any feed logged (so an unlogged day isn't read as 'fed nothing')."""
+    return [r["log_date"] for r in _query(
+        "SELECT DISTINCT log_date FROM feed_logs WHERE farmer_id = %s AND log_date BETWEEN %s AND %s ORDER BY log_date",
+        (farmer_id, start, end))]
 
 
 def set_cows_in_milk(farmer_id, effective_date, cows):

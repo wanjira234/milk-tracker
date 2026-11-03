@@ -436,3 +436,51 @@ CREATE TABLE IF NOT EXISTS charge_payments (
     created_at          TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_payments_charge ON charge_payments (charge_id);
+
+-- ---------------------------------------------------------------------------
+-- Phase 2: feed bought, feed left, and when it runs out.
+--   A purchase is recorded in the farm's own unit (a truck load, a bag) and its kg is worked out
+--   from the catalogue at the time, like a feed entry. A purchase with a price also becomes a
+--   charge in the money ledger (category 'feed'), so it shows on the Money page.
+--   A count says how much of a feed is left on a day ("finished" = 0): stock is the last count,
+--   plus what was bought after it, minus what was fed after it.
+-- ---------------------------------------------------------------------------
+ALTER TABLE feed_catalogue ADD COLUMN IF NOT EXISTS lead_days INTEGER NOT NULL DEFAULT 3
+    CHECK (lead_days BETWEEN 0 AND 60);  -- warn this many days before it runs out
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'feed_catalogue_id_farmer_key') THEN
+        ALTER TABLE feed_catalogue ADD CONSTRAINT feed_catalogue_id_farmer_key UNIQUE (id, farmer_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'charges_id_farmer_key') THEN
+        ALTER TABLE charges ADD CONSTRAINT charges_id_farmer_key UNIQUE (id, farmer_id);
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS feed_purchases (
+    id                 SERIAL PRIMARY KEY,
+    farmer_id          INTEGER       NOT NULL REFERENCES farmers(id) ON DELETE CASCADE,
+    catalogue_id       INTEGER       NOT NULL,
+    purchased_on       DATE          NOT NULL,
+    units              NUMERIC(8,2)  NOT NULL CHECK (units > 0 AND units <= 10000),
+    kg                 NUMERIC(10,2) NOT NULL CHECK (kg > 0),
+    cost_kes           NUMERIC(10,2) CHECK (cost_kes IS NULL OR cost_kes >= 0),
+    charge_id          INTEGER,
+    created_by_user_id INTEGER       REFERENCES users(id) ON DELETE SET NULL,
+    created_at         TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    FOREIGN KEY (catalogue_id, farmer_id) REFERENCES feed_catalogue (id, farmer_id) ON DELETE CASCADE,
+    FOREIGN KEY (charge_id, farmer_id) REFERENCES charges (id, farmer_id)
+);
+CREATE INDEX IF NOT EXISTS idx_purchases_item ON feed_purchases (farmer_id, catalogue_id, purchased_on);
+
+CREATE TABLE IF NOT EXISTS feed_stock_counts (
+    id           SERIAL PRIMARY KEY,
+    farmer_id    INTEGER       NOT NULL REFERENCES farmers(id) ON DELETE CASCADE,
+    catalogue_id INTEGER       NOT NULL,
+    counted_on   DATE          NOT NULL,
+    kg           NUMERIC(10,2) NOT NULL CHECK (kg >= 0),   -- 0 = finished
+    created_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    FOREIGN KEY (catalogue_id, farmer_id) REFERENCES feed_catalogue (id, farmer_id) ON DELETE CASCADE,
+    UNIQUE (catalogue_id, counted_on)                      -- one count a day per feed; a second replaces it
+);
