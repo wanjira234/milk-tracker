@@ -1,6 +1,6 @@
 """The demo accounts and data for the judges. Need TEST_DATABASE_URL."""
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 import pytest
 
@@ -109,3 +109,15 @@ def test_the_demo_has_an_organisation_its_store_and_a_platform_owner():
     assert admin["org_id"] is not None and not orgs.is_platform_owner(admin) and orgs.is_platform_owner(owner)
     assert orgs.buyer_store_for(farm["id"], store["id"]) and not orgs.buyer_store_for(farm["id"], shop["id"])
     assert db.get_farmer(farm["id"])["town"] == demo_seed.DEMO_TOWN and db.shop(shop["id"])["pay_number"] == "123456"
+
+
+def test_one_password_for_every_demo_login(capsys):
+    demo_seed.create_demo("demo-pass-123")
+    admin = db.user_by_email(demo_seed.ADMIN_EMAIL)
+    db.update_user(admin["id"], failed_logins=9, locked_until=datetime(2099, 1, 1, tzinfo=timezone.utc))
+    assert demo_seed.main(ask=lambda p: "demo", argv=["--password", "short"]) == 1
+    assert demo_seed.main(ask=lambda p: "no", argv=["--password", "maziwadev"]) == 1
+    assert demo_seed.main(ask=lambda p: "demo", argv=["--password", "maziwadev"]) == 0
+    for email in demo_seed.ALL_EMAILS:
+        assert accounts.login_password(email, "maziwadev") is not None, email
+    assert accounts.login_password(demo_seed.ADMIN_EMAIL, "demo-pass-123") is None

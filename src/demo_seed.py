@@ -147,6 +147,23 @@ def create_demo(password=None, today=None):
     return made
 
 
+ALL_EMAILS = (ADMIN_EMAIL, VET_EMAIL, FARMER_EMAIL, FRESH_EMAIL, AGROVET_EMAIL, STORE_EMAIL, OWNER_EMAIL)
+
+
+def reset_passwords(password):
+    """Give every demo login the same password, unlock it and clear two-factor. Returns the emails changed."""
+    done = []
+    for email in ALL_EMAILS:
+        user = db.user_by_email(email)
+        if user is None:
+            continue
+        accounts.set_password(user["id"], password)
+        db.update_user(user["id"], active=True, pending=False)
+        db.set_totp(user["id"], totp_enabled=False, totp_secret=None, totp_failed=0)
+        done.append(email)
+    return done
+
+
 def database_host():
     """Where DATABASE_URL points (host only: the password is never shown)."""
     from urllib.parse import urlparse
@@ -166,6 +183,25 @@ def main(ask=input, argv=None):
         with db.batch():
             done = reset_fresh_farm()
         print("Reset." if done else "The fresh demo farm does not exist yet: run this command without --reset-fresh first.")
+        return 0
+    if "--password" in argv:
+        i = argv.index("--password")
+        password = argv[i + 1] if i + 1 < len(argv) else ""
+        try:
+            accounts.check_strength(password)
+        except ValueError as e:
+            print(f"Not changed: {e}.")
+            return 1
+        print(f"This creates any missing demo logins and sets ALL demo logins to that password, in the database at: {database_host()}")
+        if ask("Type the word demo to continue: ").strip().lower() != "demo":
+            print("Cancelled. Nothing changed.")
+            return 1
+        with db.batch():
+            create_demo(password)
+            done = reset_passwords(password)
+        print("Every demo login now uses that password (Email & password tab):")
+        for email in done:
+            print(f"  {email}")
         return 0
     print(f"This writes demo accounts and SIMULATED farm data into the database at: {database_host()}")
     print("Do this only on your separate DEMO project, never on the real farm database.")

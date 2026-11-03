@@ -66,6 +66,7 @@ cp .env.example .env                     # then fill in your values (never commi
 psql "$DATABASE_URL" -f sql/schema.sql   # on Supabase: SQL editor, then "Run and enable RLS"
 streamlit run app.py
 python -m src.demo_seed                  # demo admin, vet, agrovet, a farmer with 40 days of simulated data, and a second farm one day short of advice
+python -m src.demo_seed --password <pw>  # give every demo login the same password (also unlocks them)
 python -m src.demo_seed --reset-fresh    # put that second farm back to its 15 simulated days (judges add to it)
 ```
 
