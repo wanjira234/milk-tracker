@@ -108,14 +108,14 @@ st.caption(
     "(they must choose their own at first login). Tell them the temporary password in person or by call, never in this app."
 )
 with st.form("create_account", clear_on_submit=True):
-    role = st.selectbox("Role", ["farmer", "vet", "admin", "route admin"], key="new_role",
+    role = st.selectbox("Role", ["farmer", "vet", "agrovet", "admin", "route admin"], key="new_role",
                         help="A route admin sees and notifies only the routes you give them.")
     nm = st.text_input("Name", key="new_name")
     ph = st.text_input("Phone", placeholder="0712 345 678", key="new_phone")
     em = st.text_input("Email (for password login)", key="new_email")
     tp = st.text_input("Temporary password", type="password", key="new_temp")
     farm_choices = [None] + [f["id"] for f in farmers]
-    farm_names = {None: "(vets and admins: none)"} | {f["id"]: f"{f['name']} ({f['farm_name'] or f['phone']})" for f in farmers}
+    farm_names = {None: "(vets, agrovets and admins: none)"} | {f["id"]: f"{f['name']} ({f['farm_name'] or f['phone']})" for f in farmers}
     farm = st.selectbox("Farm (farmers only)", farm_choices, format_func=farm_names.get, key="new_farm")
     route_names = {r["id"]: r["code"] for r in routes}
     new_routes = st.multiselect("Routes (route admins only)", list(route_names), format_func=route_names.get, key="new_routes")
