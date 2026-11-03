@@ -367,3 +367,72 @@ CREATE TABLE IF NOT EXISTS contact_messages (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     handled    BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+-- ---------------------------------------------------------------------------
+-- Phase 1: the farmer chooses their vet, and a money ledger (charges and payments).
+--   The app stays neutral between providers: a farm on a buyer's route keeps the route vet as the
+--   default, and may also add independent vets and send any request to one of them.
+--   A charge is what a farm owes for something (a vet visit, drugs, semen, agrovet goods), with
+--   its terms: paid on the spot, on credit until a due date, or deducted from the milk payment by
+--   the buyer. The app moves no money; it records charges and the payments against them.
+--   Money records are never deleted by the app: a wrong charge is voided, with who and why.
+-- ---------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS farm_vets (
+    farmer_id   INTEGER     NOT NULL REFERENCES farmers(id) ON DELETE CASCADE,
+    vet_user_id INTEGER     NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    added_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (farmer_id, vet_user_id)
+);
+
+-- NULL = the farm's route vet (as before); otherwise the vet the farmer chose for this request.
+ALTER TABLE service_requests ADD COLUMN IF NOT EXISTS chosen_vet_id INTEGER REFERENCES users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_requests_chosen_vet ON service_requests (chosen_vet_id, status);
+
+CREATE TABLE IF NOT EXISTS charges (
+    id                 SERIAL PRIMARY KEY,
+    farmer_id          INTEGER       NOT NULL REFERENCES farmers(id) ON DELETE CASCADE,
+    provider_user_id   INTEGER       REFERENCES users(id) ON DELETE SET NULL,  -- NULL = a supplier with no login
+    provider_name      TEXT          NOT NULL CHECK (length(provider_name) BETWEEN 1 AND 80),  -- copied, so it reads right later
+    category           TEXT          NOT NULL CHECK (category IN ('vet_visit', 'drugs', 'semen', 'agrovet', 'feed', 'other')),
+    description        TEXT          CHECK (description IS NULL OR length(description) <= 200),
+    amount_kes         NUMERIC(10,2) NOT NULL CHECK (amount_kes > 0 AND amount_kes <= 1000000),
+    charged_on         DATE          NOT NULL,
+    terms              TEXT          NOT NULL CHECK (terms IN ('paid', 'credit', 'milk_deduction')),
+    due_on             DATE,
+    request_id         INTEGER,      -- the vet visit this charge is for, if any (same farm: see below)
+    created_by_user_id INTEGER       REFERENCES users(id) ON DELETE SET NULL,
+    created_at         TIMESTAMPTZ   NOT NULL DEFAULT now(),
+    voided_at          TIMESTAMPTZ,
+    voided_by_user_id  INTEGER       REFERENCES users(id) ON DELETE SET NULL,
+    void_reason        TEXT          CHECK (void_reason IS NULL OR length(void_reason) <= 200),
+    CHECK (terms <> 'credit' OR due_on IS NOT NULL),
+    CHECK (due_on IS NULL OR due_on >= charged_on),
+    CHECK ((voided_at IS NULL) = (void_reason IS NULL)),
+    CHECK (voided_by_user_id IS NULL OR voided_at IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_charges_farm     ON charges (farmer_id, charged_on);
+CREATE INDEX IF NOT EXISTS idx_charges_provider ON charges (provider_user_id, terms);
+CREATE INDEX IF NOT EXISTS idx_charges_request  ON charges (request_id);
+-- A charge's visit must be on the same farm, and a visit with money recorded against it can't be deleted.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'service_requests_id_farmer_key') THEN
+        ALTER TABLE service_requests ADD CONSTRAINT service_requests_id_farmer_key UNIQUE (id, farmer_id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'charges_request_same_farm') THEN
+        ALTER TABLE charges ADD CONSTRAINT charges_request_same_farm
+            FOREIGN KEY (request_id, farmer_id) REFERENCES service_requests (id, farmer_id);
+    END IF;
+END $$;
+
+CREATE TABLE IF NOT EXISTS charge_payments (
+    id                  SERIAL PRIMARY KEY,
+    charge_id           INTEGER       NOT NULL REFERENCES charges(id) ON DELETE CASCADE,
+    amount_kes          NUMERIC(10,2) NOT NULL CHECK (amount_kes > 0),
+    paid_on             DATE          NOT NULL,
+    method              TEXT          NOT NULL CHECK (method IN ('mpesa', 'cash', 'bank', 'other')),
+    reference           TEXT          CHECK (reference IS NULL OR length(reference) <= 40),  -- e.g. the M-Pesa code
+    recorded_by_user_id INTEGER       REFERENCES users(id) ON DELETE SET NULL,
+    created_at          TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_payments_charge ON charge_payments (charge_id);

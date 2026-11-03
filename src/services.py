@@ -1,15 +1,18 @@
-"""Service requests: a farmer asks for the vet, the vet on that farm's route schedules and completes it.
+"""Service requests: a farmer asks for a vet, that vet schedules and completes it.
 
 Logic only (no Streamlit). Rules that matter here:
-  - a vet can only touch requests from farms on their own routes (checked on every action);
+  - a request goes to the farm's route vet, unless the farmer sends it to a vet they added themselves;
+  - a vet can only touch requests that are theirs: from farms on their routes, or sent to them (checked on every action);
   - a farmer can only cancel their own requests;
   - semen must come from the route vet's own list, and its price is copied onto the request;
   - completing an AI visit also records the service on the cow's breeding record, so the farmer
-    does not enter it twice, and its semen cost counts in the farm's monthly costs.
+    does not enter it twice, and its semen cost counts in the farm's monthly costs;
+  - completing a visit can also bill it (fee, drugs, and the semen on an AI visit) in the money ledger,
+    in the same transaction, so a visit is never marked done with half its bill saved.
 """
 from datetime import date, timedelta
 
-from src import db
+from src import db, ledger
 from src.ingestion import manual_entry as me
 
 KINDS = {"ai": "AI (insemination)", "sick": "Sick cow", "other": "Something else", "vaccination": "Vaccination"}
@@ -18,6 +21,7 @@ STATUS_WORDS = {"open": "waiting for the vet", "scheduled": "booked", "done": "d
 MAX_OPEN = 20      # one farm can't flood its vet
 HORIZON_DAYS = 60  # how far ahead a day can be asked for or booked
 MAX_NOTE = 300
+MAX_OWN_VETS = 5   # vets a farm may add besides its route vet
 
 
 def _clean(text, limit, what):
@@ -56,9 +60,35 @@ def record_vet_semen(vet_user, name, price_kes):
 # --- farmer side ------------------------------------------------------------------------------
 
 
-def request_service(farmer_id, kind, preferred_date, cow_id=None, semen_id=None, notes=None, today=None):
-    """A farmer asks the vet for something. Returns the request id."""
+def add_own_vet(farmer_id, phone):
+    """The farmer adds a vet they use (not their route vet) by the vet's phone number. Returns the vet's user id.
+    The vet must already have an approved vet login."""
+    phone = me.normalize_phone(phone)
+    vet = db.user_by_phone(phone)
+    if not vet or vet["role"] != "vet" or not vet["active"] or vet.get("pending"):
+        raise ValueError("no vet with that number uses Maziwa Plus yet: ask them to sign up as a vet")
+    if vet["id"] == db.route_vet_id(farmer_id):
+        raise ValueError("that is already your route vet")
+    if not db.is_farm_vet(farmer_id, vet["id"]) and len(db.farm_vets(farmer_id)) >= MAX_OWN_VETS:
+        raise ValueError(f"you can add at most {MAX_OWN_VETS} vets: remove one first")
+    db.add_farm_vet(farmer_id, vet["id"])
+    return vet["id"]
+
+
+def vets_for_farm(farmer_id):
+    """[(vet id or None, label)] the farmer can send a request to: the route vet first (None), then their own."""
+    route_vet = db.route_vet_id(farmer_id)
+    route_user = db.get_user(route_vet) if route_vet else None
+    out = [(None, f"Route vet: {route_user['name']}" if route_user else "Route vet (none allocated yet)")]
+    return out + [(v["id"], v["name"]) for v in db.farm_vets(farmer_id) if v["id"] != route_vet]
+
+
+def request_service(farmer_id, kind, preferred_date, cow_id=None, semen_id=None, notes=None, today=None, vet_id=None):
+    """A farmer asks a vet for something: the route vet (vet_id None) or one of the farm's own vets.
+    Returns the request id."""
     today = today or date.today()
+    if vet_id is not None and not db.is_farm_vet(farmer_id, vet_id):
+        raise ValueError("choose one of your vets")
     if kind not in FARMER_KINDS:
         raise ValueError("choose what you need")
     _check_day(preferred_date, today, "the day")
@@ -78,15 +108,15 @@ def request_service(farmer_id, kind, preferred_date, cow_id=None, semen_id=None,
         cow_id = None
     if kind == "ai" and semen_id is not None:
         semen = db.get_vet_semen(semen_id)
-        vet_id = db.route_vet_id(farmer_id)
-        if not semen or not semen["active"] or vet_id is None or semen["vet_user_id"] != vet_id:
+        answering = vet_id if vet_id is not None else db.route_vet_id(farmer_id)
+        if not semen or not semen["active"] or answering is None or semen["vet_user_id"] != answering:
             raise ValueError("choose the semen from your vet's list")
         price = semen["price_kes"]
     else:
         semen_id = None
     if db.open_request_count(farmer_id) >= MAX_OPEN:
         raise ValueError(f"you already have {MAX_OPEN} open requests: wait for the vet to clear some")
-    return db.add_request(farmer_id, kind, preferred_date, cow_id, semen_id, price, notes or None)
+    return db.add_request(farmer_id, kind, preferred_date, cow_id, semen_id, price, notes or None, chosen_vet_id=vet_id)
 
 
 def cancel_request(request_id, farmer_id):
@@ -107,8 +137,13 @@ def _own_request(request_id, vet_user):
         raise ValueError("only a vet can do this")
     q = db.get_request(request_id)
     if not q or q["vet_user_id"] != vet_user["id"]:
-        raise ValueError("that request is not on your routes")
+        raise ValueError("that request is not on your routes and was not sent to you")
     return q
+
+
+def default_terms(request):
+    """How a visit is usually settled: the buyer's route vet through the milk payment, any other vet on credit."""
+    return "milk_deduction" if request.get("chosen_vet_id") is None else "credit"
 
 
 def schedule_request(request_id, vet_user, day, today=None):
@@ -121,14 +156,21 @@ def schedule_request(request_id, vet_user, day, today=None):
     db.update_request(request_id, status="scheduled", scheduled_for=day)
 
 
-def complete_request(request_id, vet_user, notes=None, semen_id=None, today=None):
-    """The vet marks a visit done. An AI visit needs the semen used and records the service on the cow."""
+def complete_request(request_id, vet_user, notes=None, semen_id=None, today=None,
+                     lines=(), terms=None, due_on=None, method=None, reference=None):
+    """The vet marks a visit done. An AI visit needs the semen used and records the service on the cow.
+
+    Billing: `lines` = [(category, amount, note)] for the fee, drugs or anything else; the semen of an AI
+    visit is billed automatically at the agreed price. `terms` = how it is settled (default: the route
+    vet's bill goes to the milk payment, any other vet's on credit). Everything is checked first and then
+    written in one transaction."""
     today = today or date.today()
     q = _own_request(request_id, vet_user)
     if q["status"] not in ("open", "scheduled"):
         raise ValueError("this request is already closed")
     notes = _clean(notes, MAX_NOTE, "the note")
     fields = {"status": "done", "done_on": today, "done_by_user_id": vet_user["id"], "vet_notes": notes or None}
+    semen = None
     if q["kind"] == "ai":
         semen_id = semen_id if semen_id is not None else q["semen_id"]
         semen = db.get_vet_semen(semen_id) if semen_id is not None else None
@@ -136,10 +178,16 @@ def complete_request(request_id, vet_user, notes=None, semen_id=None, today=None
             raise ValueError("choose the semen used, from your own list")
         # the price the farmer was quoted stands when the vet used that same semen
         price = q["semen_price_kes"] if semen_id == q["semen_id"] and q["semen_price_kes"] is not None else semen["price_kes"]
-        farm_semen = db.add_semen(q["farmer_id"], semen["name"])  # the farm's own list, so the cow's record names it
-        me.record_breeding_event(q["farmer_id"], q["cow_id"], today, "served", farm_semen, today=today)
         fields.update(semen_id=semen_id, semen_price_kes=price)
-    db.update_request(request_id, **fields)
+    done = {**q, **fields, "semen_name": semen["name"] if semen else q["semen_name"]}
+    charges, payment = ledger.bill_for_visit(done, vet_user, lines, terms or default_terms(q), due_on, method, reference, today)
+    with db.batch():  # all or nothing: the visit, the cow's record and the bill
+        if semen is not None:
+            farm_semen = db.add_semen(q["farmer_id"], semen["name"])  # the farm's own list, so the cow's record names it
+            me.record_breeding_event(q["farmer_id"], q["cow_id"], today, "served", farm_semen, today=today)
+        db.update_request(request_id, **fields)
+        if charges:
+            db.add_charges(charges, payment)
 
 
 def carry_list(visits):
